@@ -47,7 +47,7 @@ public class WebhookController {
     // Метод для обробки вхідних повідомлень
     @PostMapping("/webhook")
     public ResponseEntity<Void> handleMessage(@org.springframework.web.bind.annotation.RequestBody String payload) {
-        System.out.println("Отримано повідомлення від Instagram: " + payload);
+        System.out.println("ОПА... Отримано повідомлення від Instagram: " + payload);
 
         JsonObject data = gson.fromJson(payload, JsonObject.class);
         // Розбираємо складний JSON від Meta
