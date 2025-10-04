@@ -74,7 +74,7 @@ public class WebhookController {
     }
 
     private void sendReply(String recipientId, String text) throws IOException {
-        String graphApiUrl = "https://graph.facebook.com/v23.0/me/messages";
+        String graphApiUrl = "https://graph.facebook.com/v23.0/830199246836474/messages";
 
         // Створюємо JSON для відповіді
         JsonObject recipient = new JsonObject();
