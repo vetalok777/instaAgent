@@ -10,7 +10,7 @@ on:
 # Змінні середовища, які будуть доступні у всьому процесі
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  SERVICE_NAME: ai-agent # <-- Замініть на назву вашого сервісу в Cloud Run
+  SERVICE_NAME: insta-agent # <-- Замініть на назву вашого сервісу в Cloud Run
   REGION: us-central1        # <-- Замініть на ваш регіон
   REPO_NAME: ai-agent        # <-- Замініть на назву вашого репозиторію в Artifact Registry
 
