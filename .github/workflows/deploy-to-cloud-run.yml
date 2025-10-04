@@ -1,0 +1,54 @@
+# Назва робочого процесу
+name: Deploy to Google Cloud Run
+
+# Умова запуску
+on:
+  push:
+    branches:
+      - main # Цей процес запускається кожного разу, коли ви робите push у гілку 'main'
+
+# Змінні середовища, які будуть доступні у всьому процесі
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  SERVICE_NAME: ai-agent # <-- Замініть на назву вашого сервісу в Cloud Run
+  REGION: us-central1        # <-- Замініть на ваш регіон
+  REPO_NAME: ai-agent        # <-- Замініть на назву вашого репозиторію в Artifact Registry
+
+# Завдання, які будуть виконуватися
+jobs:
+  deploy:
+    # Запускати на віртуальній машині Ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      # Крок 1: Клонування коду з репозиторію
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Крок 2: Автентифікація в Google Cloud за допомогою секретного ключа
+      - name: Authenticate to Google Cloud
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      # Крок 3: Налаштування gcloud CLI
+      - name: Set up Cloud SDK
+        uses: 'google-github-actions/setup-gcloud@v2'
+
+      # Крок 4: Налаштування Docker для роботи з репозиторієм Google
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+
+      # Крок 5: Збірка та завантаження Docker-образу
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+
+      # Крок 6: Розгортання нової версії в Cloud Run
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            --platform=managed \
+            --region=${{ env.REGION }} \
+            --allow-unauthenticated
