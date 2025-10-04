@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 
 @Service
 public class GeminiChatService {
-    private static final String API_URL_TEMPLATE = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=";
+    private static final String API_URL_TEMPLATE = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=";
     private final String apiKey;
     private final OkHttpClient client;
     private final Gson gson = new Gson();
