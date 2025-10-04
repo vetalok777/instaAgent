@@ -11,6 +11,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 @RestController
 public class WebhookController {
@@ -63,9 +65,17 @@ public class WebhookController {
             // Генеруємо відповідь через Gemini
             String replyText = chatService.sendMessage(messageText);
 
-            // Надсилаємо відповідь через Graph API
-            sendReply(senderId, replyText);
-
+            // --- НОВА ЛОГІКА: Розбиваємо повідомлення, якщо воно задовге ---
+            if (replyText.length() > 1000) {
+                System.out.println("Відповідь задовга (" + replyText.length() + " символів). Розбиваємо на частини.");
+                List<String> messageParts = splitMessage(replyText, 990); // Розбиваємо з невеликим запасом
+                for (String part : messageParts) {
+                    sendReply(senderId, part);
+                    Thread.sleep(1500); // Додаємо невелику затримку між повідомленнями для гарантії порядку
+                }
+            } else {
+                sendReply(senderId, replyText);
+            }
         } catch (Exception e) {
             System.err.println("Помилка обробки повідомлення: " + e.getMessage());
         }
@@ -104,5 +114,14 @@ public class WebhookController {
                 System.out.println("Відповідь успішно надіслано.");
             }
         }
+    }
+
+    private List<String> splitMessage(String text, int size) {
+        List<String> parts = new ArrayList<>();
+        int length = text.length();
+        for (int i = 0; i < length; i += size) {
+            parts.add(text.substring(i, Math.min(length, i + size)));
+        }
+        return parts;
     }
 }
