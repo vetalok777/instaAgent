@@ -5,7 +5,9 @@ import com.google.gson.JsonObject;
 import org.example.database.entity.Interaction;
 import org.example.database.repository.InteractionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
+@Service
 public class WebhookProcessingService {
     private final Gson gson = new Gson();
     private final GeminiChatService chatService;
