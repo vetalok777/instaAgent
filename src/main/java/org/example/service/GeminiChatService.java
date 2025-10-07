@@ -1,4 +1,4 @@
-package org.example;
+package org.example.service;
 
 import com.google.gson.Gson;
 import okhttp3.*;
