@@ -51,4 +51,5 @@ jobs:
             --platform=managed \
             --region=${{ env.REGION }} \
             --allow-unauthenticated \
+            --remove-env-vars="GEMINI_API_KEY,INSTAGRAM_ACCESS_TOKEN,INSTAGRAM_VERIFY_TOKEN" \
             --set-secrets="DB_PASSWORD=db-password:latest,GEMINI_API_KEY=gemini-api-key:latest,INSTAGRAM_ACCESS_TOKEN=instagram-token:latest,INSTAGRAM_VERIFY_TOKEN=instagram-verify-token:latest"
