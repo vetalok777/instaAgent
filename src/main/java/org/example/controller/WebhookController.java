@@ -5,6 +5,9 @@ import com.google.gson.JsonObject;
 import okhttp3.*;
 import okhttp3.RequestBody;
 import org.example.GeminiChatService;
+import org.example.database.entity.Interaction;
+import org.example.database.repository.InteractionRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +21,7 @@ import java.util.List;
 public class WebhookController {
 
     private final GeminiChatService chatService;
+    private final InteractionRepository interactionRepository;
     private final OkHttpClient httpClient = new OkHttpClient();
     private final Gson gson = new Gson();
 
@@ -27,8 +31,16 @@ public class WebhookController {
     @Value("${instagram.access.token}")
     private String accessToken;
 
-    public WebhookController(GeminiChatService chatService) {
+    @Value("${instagram.graph.api.url}")
+    private String graphApiUrl;
+
+    @Value("${instagram.page.id}")
+    private String pageId;
+
+    @Autowired
+    public WebhookController(GeminiChatService chatService, InteractionRepository interactionRepository) {
         this.chatService = chatService;
+        this.interactionRepository = interactionRepository;
     }
 
     // Метод для верифікації Webhook
@@ -46,45 +58,65 @@ public class WebhookController {
         }
     }
 
-    // Метод для обробки вхідних повідомлень
     @PostMapping("/webhook")
     public ResponseEntity<Void> handleMessage(@org.springframework.web.bind.annotation.RequestBody String payload) {
-        System.out.println("ОПА... Отримано повідомлення від Instagram: " + payload);
+        System.out.println("Отримано повідомлення від Instagram: " + payload);
 
         JsonObject data = gson.fromJson(payload, JsonObject.class);
-        // Розбираємо складний JSON від Meta
         try {
-            String messageText = data.getAsJsonArray("entry").get(0).getAsJsonObject()
-                    .getAsJsonArray("messaging").get(0).getAsJsonObject()
-                    .getAsJsonObject("message").get("text").getAsString();
+            JsonObject messaging = data.getAsJsonArray("entry").get(0).getAsJsonObject()
+                    .getAsJsonArray("messaging").get(0).getAsJsonObject();
 
-            String senderId = data.getAsJsonArray("entry").get(0).getAsJsonObject()
-                    .getAsJsonArray("messaging").get(0).getAsJsonObject()
-                    .getAsJsonObject("sender").get("id").getAsString();
+            // ГОЛОВНА ПЕРЕВІРКА: обробляємо, тільки якщо це справжнє повідомлення, а не "echo" чи "read"
+            if (messaging.has("message") && !messaging.getAsJsonObject("message").has("is_echo")) {
+                JsonObject messageObject = messaging.getAsJsonObject("message");
 
-            // Генеруємо відповідь через Gemini
-            String replyText = chatService.sendMessage(messageText);
+                // Перевіряємо, чи є в повідомленні текст
+                if (messageObject.has("text")) {
+                    String messageId = messageObject.get("mid").getAsString();
 
-            // --- НОВА ЛОГІКА: Розбиваємо повідомлення, якщо воно задовге ---
-            if (replyText.length() > 1000) {
-                System.out.println("Відповідь задовга (" + replyText.length() + " символів). Розбиваємо на частини.");
-                List<String> messageParts = splitMessage(replyText, 990); // Розбиваємо з невеликим запасом
-                for (String part : messageParts) {
-                    sendReply(senderId, part);
-                    Thread.sleep(1500); // Додаємо невелику затримку між повідомленнями для гарантії порядку
+                    // ПЕРЕВІРКА НА ДУБЛІКАТ
+                    if (interactionRepository.existsByMessageId(messageId)) {
+                        System.out.println("Отримано дублікат повідомлення з ID: " + messageId + ". Ігноруємо.");
+                        return new ResponseEntity<>(HttpStatus.OK);
+                    }
+
+                    String messageText = messageObject.get("text").getAsString();
+                    String senderId = messaging.getAsJsonObject("sender").get("id").getAsString();
+
+                    // 2. Зберігаємо повідомлення від користувача в БД
+                    Interaction userInteraction = new Interaction(senderId, "USER", messageText);
+                    userInteraction.setMessageId(messageId); // Встановлюємо ID
+                    interactionRepository.save(userInteraction);
+                    System.out.println("Збережено повідомлення від " + senderId);
+
+                    // 3. Викликаємо сервіс
+                    String replyText = chatService.sendMessage(senderId, messageText);
+
+                    // 4. Зберігаємо відповідь від AI в БД
+                    Interaction aiInteraction = new Interaction(senderId, "AI", replyText);
+                    interactionRepository.save(aiInteraction);
+                    System.out.println("Збережено відповідь AI для " + senderId);
+
+                    // 5. Надсилаємо відповідь користувачу
+                    sendReply(senderId, replyText); // Спростив, прибрав розбивку для ясності
+                } else {
+                    System.out.println("Отримано повідомлення без тексту (стікер, фото і т.д.). Ігноруємо.");
                 }
             } else {
-                sendReply(senderId, replyText);
+                // Це може бути "echo", "read", або інша системна подія
+                System.out.println("Отримано системну подію (echo/read). Ігноруємо.");
             }
         } catch (Exception e) {
             System.err.println("Помилка обробки повідомлення: " + e.getMessage());
+            e.printStackTrace();
         }
 
         return new ResponseEntity<>(HttpStatus.OK);
     }
 
     private void sendReply(String recipientId, String text) throws IOException {
-        String graphApiUrl = "https://graph.facebook.com/v23.0/830199246836474/messages";
+        String fullUrl =  graphApiUrl + "/" + pageId + "/messages";
 
         // Створюємо JSON для відповіді
         JsonObject recipient = new JsonObject();
@@ -103,7 +135,7 @@ public class WebhookController {
         );
 
         Request request = new Request.Builder()
-                .url(graphApiUrl)
+                .url(fullUrl)
                 .post(body)
                 .build();
 

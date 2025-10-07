@@ -1,4 +1,3 @@
-# Назва робочого процесу
 name: Deploy to Google Cloud Run
 
 # Умова запуску
@@ -51,4 +50,5 @@ jobs:
             --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
             --platform=managed \
             --region=${{ env.REGION }} \
-            --allow-unauthenticated
+            --allow-unauthenticated \
+            --set-secrets="DB_PASSWORD=db-password:latest,GEMINI_API_KEY=gemini-api-key:latest,INSTAGRAM_ACCESS_TOKEN=instagram-token:latest,INSTAGRAM_VERIFY_TOKEN=instagram-verify-token:latest"
