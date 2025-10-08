@@ -7,6 +7,13 @@ import org.example.database.repository.InteractionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+/**
+ * Service responsible for processing incoming webhook payloads from Instagram.
+ * <p>
+ * This service acts as the central hub for handling messages. It parses the payload,
+ * checks for duplicates, saves the user's message, retrieves a response from the AI,
+ * saves the AI's response, and sends the reply back to the user.
+ */
 @Service
 public class WebhookProcessingService {
     private final Gson gson = new Gson();
@@ -14,6 +21,13 @@ public class WebhookProcessingService {
     private final InteractionRepository interactionRepository;
     private final InstagramMessageService instagramMessageService;
 
+    /**
+     * Constructs a new WebhookProcessingService with the required dependencies.
+     *
+     * @param chatService             The service for communicating with the Gemini AI.
+     * @param interactionRepository   The repository for saving and retrieving interaction data.
+     * @param instagramMessageService The service for sending messages back to Instagram.
+     */
     @Autowired
     public WebhookProcessingService(GeminiChatService chatService,
                                     InteractionRepository interactionRepository,
@@ -23,6 +37,16 @@ public class WebhookProcessingService {
         this.instagramMessageService = instagramMessageService;
     }
 
+    /**
+     * Processes the raw JSON payload received from the Instagram webhook.
+     * <p>
+     * This method extracts the message details, processes only textual messages,
+     * checks for duplicates, and orchestrates the conversation flow by involving
+     * the chat service and the message sending service. It ignores non-text messages
+     * and system events like echoes or read receipts.
+     *
+     * @param payload The JSON string payload from the webhook.
+     */
     public void processWebhookPayload(String payload) {
         System.out.println("Отримано повідомлення від Instagram: " + payload);
 
