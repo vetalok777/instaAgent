@@ -34,8 +34,6 @@ public class Interaction {
     @Column(name = "message_id", unique = true)
     private String messageId;
 
-    // Конструктор для зручного створення об'єктів залишаємо,
-    // оскільки він містить логіку встановлення часу.
     public Interaction(String senderId, String author, String text) {
         this.senderId = senderId;
         this.author = author;

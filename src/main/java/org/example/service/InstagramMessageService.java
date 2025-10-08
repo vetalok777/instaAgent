@@ -10,6 +10,12 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * A service responsible for sending messages to users via the Instagram Graph API.
+ * <p>
+ * This class formats and sends replies, and also handles long messages
+ * by splitting them into multiple parts according to the platform's limitations.
+ */
 @Service
 public class InstagramMessageService {
     private final OkHttpClient httpClient = new OkHttpClient();
@@ -24,8 +30,17 @@ public class InstagramMessageService {
     @Value("${instagram.page.id}")
     private String pageId;
 
+    /**
+     * Sends a text reply to a user on Instagram.
+     * <p>
+     * If the message exceeds 1000 characters, it is automatically split
+     * into smaller parts and sent sequentially with a short delay.
+     *
+     * @param recipientId The Instagram user ID to send the reply to.
+     * @param text        The text of the message to send.
+     */
     public void sendReply(String recipientId, String text) {
-        // Перевіряємо, чи є логіка розбивки на частини
+        // Check if the message needs to be split
         if (text.length() > 1000) {
             List<String> messageParts = splitMessage(text, 990);
             for (String part : messageParts) {
@@ -46,6 +61,13 @@ public class InstagramMessageService {
         }
     }
 
+    /**
+     * An internal method for sending a single part of a message via the Instagram Graph API.
+     *
+     * @param recipientId The recipient's ID.
+     * @param text        The text of the message (or a part of it).
+     * @throws IOException if an error occurs during the HTTP request execution.
+     */
     private void sendMessagePart(String recipientId, String text) throws IOException {
         String fullUrl = graphApiUrl + "/" + pageId + "/messages";
 
@@ -78,6 +100,13 @@ public class InstagramMessageService {
         }
     }
 
+    /**
+     * A helper method to split a long string into a list of smaller parts.
+     *
+     * @param text The string to be split.
+     * @param size The maximum size of each part.
+     * @return A list of strings, which are parts of the original text.
+     */
     private List<String> splitMessage(String text, int size) {
         List<String> parts = new ArrayList<>();
         int length = text.length();

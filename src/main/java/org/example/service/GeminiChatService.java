@@ -18,6 +18,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Service for interacting with the Google Gemini API.
+ * <p>
+ * This class is responsible for building conversation histories, sending requests to the Gemini model,
+ * and processing the responses. It dynamically constructs the context for each user, including a
+ * system prompt and recent interactions, to provide relevant and contextual replies.
+ */
 @Service
 public class GeminiChatService {
     private static final String API_URL_TEMPLATE = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=";
@@ -30,6 +37,11 @@ public class GeminiChatService {
     private final Gson gson = new Gson();
     private final List<Content> history = new ArrayList<>();
 
+    /**
+     * Constructs the GeminiChatService.
+     *
+     * @param interactionRepository The repository for accessing conversation history from the database.
+     */
     @Autowired
     public GeminiChatService(InteractionRepository interactionRepository) throws IOException {
         this.interactionRepository = interactionRepository;
@@ -41,6 +53,17 @@ public class GeminiChatService {
                 .build();
     }
 
+    /**
+     * Sends a message to the Gemini API and returns the AI's response.
+     * <p>
+     * This method builds a full conversation history for the given sender, adds the new message,
+     * and calls the Gemini API to get a generated response.
+     *
+     * @param senderId The unique identifier for the user.
+     * @param message  The user's current message text.
+     * @return The text content of the AI's reply.
+     * @throws IOException if there is an issue with the API request.
+     */
     public String sendMessage(String senderId, String message) throws IOException {
         // 1. Динамічно будуємо історію для Gemini
         List<Content> conversationHistory = buildConversationHistory(senderId);
@@ -81,6 +104,15 @@ public class GeminiChatService {
         }
     }
 
+    /**
+     * Builds the conversation history for a specific user to be sent to the Gemini API.
+     * <p>
+     * It starts with a system prompt, followed by an initial model response, and then appends
+     * the last 10 interactions from the database for that user.
+     *
+     * @param senderId The unique identifier for the user whose history is being built.
+     * @return A list of {@link Content} objects representing the conversation history.
+     */
     private List<Content> buildConversationHistory(String senderId) {
         List<Content> history = new ArrayList<>();
 
@@ -106,7 +138,14 @@ public class GeminiChatService {
         return history;
     }
 
-    // Метод, що створює системний промт. Ми не зберігаємо його в БД, а додаємо щоразу.
+    /**
+     * Creates the system prompt content that provides instructions to the AI model.
+     * <p>
+     * This prompt defines the AI's persona, rules of engagement, tone, and escalation procedures.
+     * It is not stored in the database but is prepended to every API request.
+     *
+     * @return A {@link Content} object containing the system prompt.
+     */
     private Content createSystemPrompt() {
         String systemPromptText =  "Ти — InstaGenius AI, дружній та експертний AI-асистент для Instagram-магазину одягу 'FashionStyle'. Твоя головна мета — допомагати клієнтам та доводити їх до покупки."
 
@@ -133,7 +172,13 @@ public class GeminiChatService {
         return systemContent;
     }
 
-    // Початкова відповідь моделі, щоб задати тон розмови
+    /**
+     * Creates an initial model response to set the tone and start the conversation.
+     * <p>
+     * This helps guide the AI's subsequent responses.
+     *
+     * @return A {@link Content} object representing the model's initial message.
+     */
     private Content createInitialModelResponse() {
         Part modelResponsePart = new Part();
         modelResponsePart.text = "Так, я готовий допомагати!";
