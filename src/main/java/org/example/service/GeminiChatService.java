@@ -87,10 +87,15 @@ public class GeminiChatService {
     private List<Content> buildConversationHistory(String senderId) {
         List<Content> history = new ArrayList<>();
         history.add(createSystemPrompt());
-        history.add(createInitialModelResponse());
 
         List<Interaction> interactions = interactionRepository.findTop10BySenderIdOrderByTimestampDesc(senderId);
-        Collections.reverse(interactions);
+
+        // Додаємо початкову відповідь-привітання, тільки якщо це початок розмови (немає попередніх повідомлень)
+        if (interactions.isEmpty()) {
+            history.add(createInitialModelResponse());
+        }
+
+        Collections.reverse(interactions); // Перевертаємо, щоб повідомлення були в хронологічному порядку
 
         for (Interaction interaction : interactions) {
             Part part = new Part();
