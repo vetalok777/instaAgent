@@ -115,5 +115,29 @@ public class InstagramMessageService {
         }
         return parts;
     }
+
+    public String getShortcodeFromAssetId(String assetId) {
+        String url = graphApiUrl + "/" + assetId + "?fields=shortcode&access_token=" + accessToken;
+
+        Request request = new Request.Builder()
+                .url(url)
+                .get()
+                .build();
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                System.err.println("Помилка отримання shortcode: " + response.body().string());
+                return null;
+            }
+            String responseBody = response.body().string();
+            JsonObject jsonObject = gson.fromJson(responseBody, JsonObject.class);
+            if (jsonObject.has("shortcode")) {
+                return jsonObject.get("shortcode").getAsString();
+            }
+        } catch (IOException e) {
+            System.err.println("Помилка API-запиту для отримання shortcode: " + e.getMessage());
+        }
+        return null;
+    }
 }
 
