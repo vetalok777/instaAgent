@@ -21,7 +21,6 @@ public class PostProductLink {
     @Column(name = "instagram_post_id", nullable = false, unique = true)
     private String instagramPostId;
 
-    // Зв'язок з таблицею продуктів
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id")
     private Product product;

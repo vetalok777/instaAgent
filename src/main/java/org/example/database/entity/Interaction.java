@@ -14,17 +14,16 @@ import java.time.LocalDateTime;
 @Table(name = "interactions")
 public class Interaction {
 
-    @Id // Позначає первинний ключ (Primary Key)
-    @GeneratedValue(strategy = GenerationType.IDENTITY) // Автоматична генерація ID базою даних
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "sender_id", nullable = false) // ID користувача з Instagram
+    @Column(name = "sender_id", nullable = false)
     private String senderId;
 
-    @Column(name = "message_author", nullable = false) // Хто автор: "USER" чи "AI"
+    @Column(name = "message_author", nullable = false)
     private String author;
 
-     // Вказує, що це поле може зберігати великий обсяг тексту
     @Column(name = "message_text", nullable = false, columnDefinition = "TEXT")
     private String text;
 
