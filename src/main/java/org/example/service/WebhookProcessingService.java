@@ -72,40 +72,34 @@ public class WebhookProcessingService {
 
                     if (interactionRepository.existsByMessageId(messageId)) {
                         System.out.println("Отримано дублікат повідомлення з ID: " + messageId + ". Ігноруємо.");
-                        return; // Просто виходимо з методу
+                        return;
                     }
 
                     String messageText = messageObject.get("text").getAsString();
                     String senderId = messaging.getAsJsonObject("sender").get("id").getAsString();
 
-                    // 1. Зберігаємо повідомлення користувача
                     Interaction userInteraction = new Interaction(senderId, "USER", messageText);
                     userInteraction.setMessageId(messageId);
                     interactionRepository.save(userInteraction);
                     System.out.println("Збережено повідомлення від " + senderId);
 
-                    // 2. Отримуємо відповідь від AI
                     String replyText = chatService.sendMessage(senderId, messageText);
 
-                    // 3. Зберігаємо відповідь AI
                     Interaction aiInteraction = new Interaction(senderId, "AI", replyText);
                     interactionRepository.save(aiInteraction);
                     System.out.println("Збережено відповідь AI для " + senderId);
 
-                    // 4. Надсилаємо відповідь користувачу через новий сервіс
                     instagramMessageService.sendReply(senderId, replyText);
                 } else if (messageObject.has("attachments")) {
                     JsonArray attachments = messageObject.getAsJsonArray("attachments");
                     JsonObject firstAttachment = attachments.get(0).getAsJsonObject();
 
-                    // 1. Перевіряємо, чи це поширення поста
                     if (firstAttachment.has("type") && "share".equals(firstAttachment.get("type").getAsString())) {
                         JsonObject payloadObject = firstAttachment.getAsJsonObject("payload");
 
                         if (payloadObject.has("url")) {
                             String url = payloadObject.get("url").getAsString();
 
-                            // 2. Витягуємо asset_id з URL
                             String instagramPostId = extractAssetIdFromUrl(url);
 
                             if (instagramPostId != null) {
@@ -140,23 +134,19 @@ public class WebhookProcessingService {
 
         if (shortCode == null) {
             System.err.println("Не вдалося отримати shortcode для asset_id: " + assetId);
-            // Можна відправити стандартну відповідь
             return;
         }
 
-        // 1. Шукаємо зв'язок поста з продуктом у нашій новій таблиці
         Optional<PostProductLink> linkOptional = postProductLinkRepository.findByInstagramPostId(shortCode);
 
         if (linkOptional.isPresent()) {
             Product product = linkOptional.get().getProduct();
 
-            // Якщо продукту з таким ID вже немає в базі, але посилання залишилось
             if (product == null) {
                 instagramMessageService.sendReply(senderId, "Дякую! Схоже, цей товар вже неактуальний. Можливо, вас зацікавить щось інше з нашого асортименту?");
                 return;
             }
 
-            // 2. Створюємо спеціальний промпт для Gemini
             String userQuestion = String.format(
                     "Я зацікавився/лась цим товаром. Розкажи про нього детальніше, будь ласка."
             );
@@ -166,14 +156,11 @@ public class WebhookProcessingService {
             );
 
             try {
-                // 3. Викликаємо Gemini (використовуємо існуючий метод sendMessage)
                 String replyText = chatService.sendMessage(senderId, contextPrompt);
 
-                // 4. Зберігаємо "уявне" питання користувача та відповідь AI
                 interactionRepository.save(new Interaction(senderId, "USER", userQuestion));
                 interactionRepository.save(new Interaction(senderId, "AI", replyText));
 
-                // 5. Надсилаємо відповідь
                 instagramMessageService.sendReply(senderId, replyText);
 
             } catch (IOException e) {
@@ -182,7 +169,6 @@ public class WebhookProcessingService {
             }
 
         } else {
-            // Якщо ми не знайшли зв'язку цього поста з товаром в нашій базі
             System.out.println("Не знайдено зв'язку для поста з ID: " + shortCode);
             instagramMessageService.sendReply(senderId, "Дякую, що поділилися! На жаль, я не зміг автоматично знайти інформацію про цей товар. Наш менеджер незабаром підключиться, щоб вам допомогти.");
         }

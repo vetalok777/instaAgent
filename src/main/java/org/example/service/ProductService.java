@@ -9,8 +9,8 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * Сервіс для керування бізнес-логікою, пов'язаною з товарами.
- * Інкапсулює роботу з репозиторіями товарів та їх варіантів.
+ * Service for managing the business logic related ith products.
+ * Encapsulate work with the products repositories and their variants.
  */
 @Service
 public class ProductService {
@@ -25,13 +25,11 @@ public class ProductService {
     }
 
     /**
-     * Шукає товари, назва яких містить ключове слово.
-     * @param nameKeyword Ключове слово для пошуку в назві товару.
-     * @return Список знайдених товарів.
+     * Searching for products whose names contain key word.
+     * @param nameKeyword Key word for searching in the product name.
+     * @return List of found products.
      */
     public List<Product> findProductsByName(String nameKeyword) {
         return productRepository.findByNameWithVariants(nameKeyword);
     }
-
-    // У майбутньому тут можна додати методи для отримання інформації про наявність, ціни, варіанти тощо.
 }

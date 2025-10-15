@@ -1,49 +1,49 @@
 name: Deploy to Google Cloud Run
 
-# Умова запуску
+# Startup condition
 on:
   push:
     branches:
-      - master # Цей процес запускається кожного разу, коли ви робите push у гілку 'main'
+      - master # This process is triggered every time when push to the ‘main’ branch.
 
-# Змінні середовища, які будуть доступні у всьому процесі
+# Variable environments that will be available throughout the process
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  SERVICE_NAME: insta-agent # <-- Замініть на назву вашого сервісу в Cloud Run
-  REGION: us-central1        # <-- Замініть на ваш регіон
-  REPO_NAME: ai-agent        # <-- Замініть на назву вашого репозиторію в Artifact Registry
+  SERVICE_NAME: insta-agent
+  REGION: us-central1
+  REPO_NAME: ai-agent
 
-# Завдання, які будуть виконуватися
+# Tasks to be performed
 jobs:
   deploy:
-    # Запускати на віртуальній машині Ubuntu
+    # Launching on Ubuntu
     runs-on: ubuntu-latest
     steps:
-      # Крок 1: Клонування коду з репозиторію
+      # Step 1: Cloning code from repository
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Крок 2: Автентифікація в Google Cloud за допомогою секретного ключа
+      # Step 2: Authentication ti Google Cloud with a secret key
       - name: Authenticate to Google Cloud
         uses: 'google-github-actions/auth@v2'
         with:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
-      # Крок 3: Налаштування gcloud CLI
+      # Step 3: Configuring gcloud CLI
       - name: Set up Cloud SDK
         uses: 'google-github-actions/setup-gcloud@v2'
 
-      # Крок 4: Налаштування Docker для роботи з репозиторієм Google
+      # Step 4: Configuring Docker for working with Google repository
       - name: Configure Docker
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
-      # Крок 5: Збірка та завантаження Docker-образу
+      # Step 5: Build and Push Docker Docker-образу
       - name: Build and Push Docker Image
         run: |
           docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
 
-      # Крок 6: Розгортання нової версії в Cloud Run
+      # Step 6: Deploying new version on Cloud Run
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \

@@ -11,11 +11,10 @@ import java.util.List;
 public interface InteractionRepository extends JpaRepository<Interaction, Long> {
 
     /**
-     * Цей метод буде автоматично реалізований Spring Data JPA.
-     * Він шукає останні 10 повідомлень для конкретного senderId,
-     * сортуючи їх за часом у зворотному порядку (найновіші перші).
-     * @param senderId ID користувача в Instagram
-     * @return Список з 10 або менше останніх взаємодій
+     * Searching for the last 10 messages of senderId,
+     * sorting them by the time in descending order.
+     * @param senderId ID of the user from Instagram
+     * @return The list of 10 or fewer interactions
      */
     List<Interaction> findTop10BySenderIdOrderByTimestampDesc(String senderId);
     boolean existsByMessageId(String messageId);
