@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -69,6 +70,7 @@ public class WebhookController {
      * @return A {@link ResponseEntity} with an OK status to acknowledge receipt of the message.
      */
     @PostMapping
+    @Async
     public ResponseEntity<Void> handleMessage(@RequestBody String payload) {
         processingService.processWebhookPayload(payload);
         return new ResponseEntity<>(HttpStatus.OK);
