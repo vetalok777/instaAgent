@@ -33,16 +33,13 @@ import java.util.concurrent.TimeUnit;
 public class WebhookProcessingService {
 
     private final Gson gson = new Gson();
-
     private final GeminiChatService chatService;
-
     private final InstagramMessageService instagramMessageService;
-
     private final InteractionRepository interactionRepository;
     private final PostProductLinkRepository postProductLinkRepository;
     private final ProductRepository productRepository;
 
-    private final Map<String, Long> postShareCache = new ConcurrentHashMap<>();
+    private final Map<String, String> postShareCache = new ConcurrentHashMap<>();
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
     /**
@@ -53,9 +50,7 @@ public class WebhookProcessingService {
      * @param instagramMessageService The service for sending messages back to Instagram.
      */
     @Autowired
-    public WebhookProcessingService(GeminiChatService chatService,
-                                    InteractionRepository interactionRepository,
-                                    InstagramMessageService instagramMessageService, PostProductLinkRepository postProductLinkRepository, ProductRepository productRepository) {
+    public WebhookProcessingService(GeminiChatService chatService, InteractionRepository interactionRepository, InstagramMessageService instagramMessageService, PostProductLinkRepository postProductLinkRepository, ProductRepository productRepository) {
         this.chatService = chatService;
         this.interactionRepository = interactionRepository;
         this.instagramMessageService = instagramMessageService;
@@ -77,87 +72,146 @@ public class WebhookProcessingService {
     @Transactional
     public void processWebhookPayload(String payload) {
         System.out.println("Отримано повідомлення від Instagram: " + payload);
-
         JsonObject data = gson.fromJson(payload, JsonObject.class);
+
         try {
-            JsonObject messaging = data.getAsJsonArray("entry").get(0).getAsJsonObject()
-                    .getAsJsonArray("messaging").get(0).getAsJsonObject();
+            JsonObject messaging = data.getAsJsonArray("entry").get(0).getAsJsonObject().getAsJsonArray("messaging").get(0).getAsJsonObject();
             String senderId = messaging.getAsJsonObject("sender").get("id").getAsString();
 
-            if (messaging.has("message") && !messaging.getAsJsonObject("message").has("is_echo")) {
-                JsonObject messageObject = messaging.getAsJsonObject("message");
-
-                if (messageObject.has("text")) {
-                    String messageId = messageObject.get("mid").getAsString();
-                    if (interactionRepository.existsByMessageId(messageId)) {
-                        System.out.println("Отримано дублікат повідомлення з ID: " + messageId + ". Ігноруємо.");
-                        return;
-                    }
-
-                    String messageText = messageObject.get("text").getAsString();
-
-                    Long sharedProductId = postShareCache.remove(senderId);
-                    if (sharedProductId != null) {
-                        Optional<Product> productOptional = productRepository.findById(sharedProductId);
-                        productOptional.ifPresent(product -> {
-                            try {
-                                handleTextReplyToPost(senderId, messageText, product, messageId);
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
-                    } else {
-                        handleSimpleTextMessage(senderId, messageText, messageId);
-                    }
-
-                } else if (messageObject.has("attachments")) {
-                    handleAttachmentMessage(messaging);
-                }
-            } else {
-                System.out.println("Отримано системну подію (echo/read). Ігноруємо.");
+            if (!messaging.has("message") || messaging.getAsJsonObject("message").has("is_echo")) {
+                System.out.println("Отримано системну подію (echo/read) або подію без повідомлення. Ігноруємо.");
+                return;
             }
+
+            JsonObject messageObject = messaging.getAsJsonObject("message");
+            String messageId = messageObject.get("mid").getAsString();
+
+            if (interactionRepository.existsByMessageId(messageId)) {
+                System.out.println("Отримано дублікат повідомлення з ID: " + messageId + ". Ігноруємо.");
+                return;
+            }
+
+            boolean hasText = messageObject.has("text");
+            Product sharedProduct = getProductFromAttachment(messaging);
+
+            // Unified logic for handling different message types
+            if (hasText && sharedProduct != null) {
+                // Case 1: User sends a post with a text message in a single event.
+                String messageText = messageObject.get("text").getAsString();
+                postShareCache.remove(senderId); // In case there's a lingering cache, clear it.
+                try {
+                    handleTextReplyToPost(senderId, messageText, sharedProduct, messageId);
+                } catch (IOException e) {
+                    System.err.println("Помилка при обробці відповіді на пост з текстом: " + e.getMessage());
+                }
+            } else if (hasText) {
+                // Case 2: User sends a text message. It could be a standalone message
+                // or a reply to a post that was sent in a separate, preceding event.
+                String messageText = messageObject.get("text").getAsString();
+                String cachedValue = postShareCache.remove(senderId);
+
+                if (cachedValue != null) {
+                    // A post was shared recently. Treat this text as a reply to that post.
+                    Long productId = Long.parseLong(cachedValue.split(":")[0]);
+                    productRepository.findById(productId).ifPresent(product -> {
+                        try {
+                            handleTextReplyToPost(senderId, messageText, product, messageId);
+                        } catch (IOException e) {
+                            System.err.println("Помилка при обробці відповіді на пост: " + e.getMessage());
+                        }
+                    });
+                } else {
+                    // No recent post share. Treat as a simple text message.
+                    handleSimpleTextMessage(senderId, messageText, messageId);
+                }
+            } else if (sharedProduct != null) {
+                // Case 3: User shares a post without any text.
+                // We'll wait a few seconds to see if a text message follows up.
+                String cacheValue = sharedProduct.getId() + ":" + messageId;
+                postShareCache.put(senderId, cacheValue);
+                scheduler.schedule(() -> handleSimplePostShare(senderId), 3, TimeUnit.SECONDS);
+            }
+
         } catch (Exception e) {
             System.err.println("Помилка обробки повідомлення: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
-    private void handleSimpleTextMessage(String senderId, String messageText, String messageId) throws IOException {
-        Interaction userInteraction = new Interaction(senderId, "USER", messageText);
-        userInteraction.setMessageId(messageId);
-        interactionRepository.save(userInteraction);
-        System.out.println("Збережено повідомлення від " + senderId);
+    private void handleSimpleTextMessage(String senderId, String messageText, String messageId) {
+        try {
+            Interaction userInteraction = new Interaction(senderId, "USER", messageText);
+            userInteraction.setMessageId(messageId);
+            interactionRepository.save(userInteraction);
 
-        String replyText = chatService.sendMessage(senderId, messageText);
+            String contextPrompt = String.format(
+                "Проаналізуй історію чату і дай відповідь на повідомлення користувача. Якщо це початок розмови, можеш привітатися. В іншому випадку, не вітайся і одразу переходь до суті. Повідомлення користувача: '%s'",
+                messageText
+            );
+            String replyText = chatService.sendMessage(senderId, contextPrompt);
 
-        Interaction aiInteraction = new Interaction(senderId, "AI", replyText);
-        interactionRepository.save(aiInteraction);
-        System.out.println("Збережено відповідь AI для " + senderId);
-
-        instagramMessageService.sendReply(senderId, replyText);
+            interactionRepository.save(new Interaction(senderId, "AI", replyText));
+            instagramMessageService.sendReply(senderId, replyText);
+        } catch (IOException e) {
+            System.err.println("Помилка при обробці простого текстового повідомлення: " + e.getMessage());
+        }
     }
 
     private void handleTextReplyToPost(String senderId, String userReply, Product product, String messageId) throws IOException {
-        System.out.println("Обробка відповіді на поширений пост.");
-
-        String contextPrompt = String.format(
-                "Користувач відповів на пост про товар. Інформація про товар: Назва: '%s', Ціна: %s грн, Опис: '%s'. Повідомлення користувача: '%s'. Дай змістовну відповідь, враховуючи і товар, і повідомлення.",
-                product.getName(), product.getPrice().toString(), product.getDescription(), userReply
-        );
-
-        Interaction userInteraction = new Interaction(senderId, "USER", userReply);
+        String dbMessage = String.format("Поділився постом про '%s' і відповів: \"%s\"", product.getName(), userReply);
+        Interaction userInteraction = new Interaction(senderId, "USER", dbMessage);
         userInteraction.setMessageId(messageId);
         interactionRepository.save(userInteraction);
 
+        String contextPrompt = String.format(
+                "Користувач відповів на пост про товар. Інформація про товар: Назва: '%s', Ціна: %s грн, Опис: '%s'. Повідомлення користувача: '%s'. Проаналізуй історію чату: не вітайся, якщо ви вже спілкувалися. Дай змістовну відповідь по суті.",
+                product.getName(), product.getPrice().toString(), product.getDescription(), userReply
+        );
+
         String replyText = chatService.sendMessage(senderId, contextPrompt);
         interactionRepository.save(new Interaction(senderId, "AI", replyText));
-
         instagramMessageService.sendReply(senderId, replyText);
     }
 
-    private void handleAttachmentMessage(JsonObject messaging) {
-        String senderId = messaging.getAsJsonObject("sender").get("id").getAsString();
+    private void handleSimplePostShare(String senderId) {
+        String cachedValue = postShareCache.remove(senderId);
+        if (cachedValue == null) {
+            return; // Already processed as a reply with text
+        }
+
+        String[] parts = cachedValue.split(":");
+        Long productId = Long.parseLong(parts[0]);
+        String messageId = parts[1];
+
+        if (interactionRepository.existsByMessageId(messageId)) {
+            return; // Avoid race conditions and double processing
+        }
+
+        productRepository.findById(productId).ifPresent(product -> {
+            try {
+                String shareMessage = String.format("Користувач поділився постом про товар: %s", product.getName());
+                Interaction userInteraction = new Interaction(senderId, "USER", shareMessage);
+                userInteraction.setMessageId(messageId);
+                interactionRepository.save(userInteraction);
+
+                String contextPrompt = String.format(
+                        "Користувач щойно поділився постом про товар. Інформація про товар: Назва: '%s', Ціна: %s грн, Опис: '%s'. Проаналізуй історію чату: якщо це початок розмови, привітайся. Потім запитай, що саме його цікавить у цьому товарі.",
+                        product.getName(), product.getPrice().toString(), product.getDescription()
+                );
+
+                String replyText = chatService.sendMessage(senderId, contextPrompt);
+                interactionRepository.save(new Interaction(senderId, "AI", replyText));
+                instagramMessageService.sendReply(senderId, replyText);
+            } catch (IOException e) {
+                System.err.println("Помилка при відкладеній обробці поста: " + e.getMessage());
+            }
+        });
+    }
+
+    private Product getProductFromAttachment(JsonObject messaging) {
         JsonObject messageObject = messaging.getAsJsonObject("message");
+        if (!messageObject.has("attachments")) return null;
+
         JsonArray attachments = messageObject.getAsJsonArray("attachments");
         JsonObject firstAttachment = attachments.get(0).getAsJsonObject();
 
@@ -169,55 +223,19 @@ public class WebhookProcessingService {
                 String shortcode = instagramMessageService.getShortcodeFromAssetId(assetId);
                 if (shortcode != null) {
                     Optional<PostProductLink> linkOptional = postProductLinkRepository.findByInstagramPostId(shortcode);
-                    if (linkOptional.isPresent() && linkOptional.get().getProduct() != null) {
-                        Product product = linkOptional.get().getProduct();
-
-                        postShareCache.put(senderId, product.getId());
-                        System.out.println("Пост поширено. Товар додано в кеш на 2 секунди для senderId: " + senderId);
-
-                        scheduler.schedule(() -> processDelayedPostShare(senderId), 2, TimeUnit.SECONDS);
-                    }
+                    return linkOptional.map(PostProductLink::getProduct).orElse(null);
                 }
             }
-        } else {
-            System.out.println("Отримано інший тип вкладення. Ігноруємо.");
         }
+        return null;
     }
 
-    private void processDelayedPostShare(String senderId) {
-        Long productId = postShareCache.remove(senderId);
-        if (productId != null) {
-            System.out.println("Відповідь на пост не надійшла. Обробляємо як просте поширення.");
-
-            productRepository.findById(productId).ifPresent(product -> {
-                try {
-                    String contextPrompt = String.format(
-                            "Користувач щойно поділився постом про товар. Інформація про товар: Назва: '%s', Ціна: %s грн, Опис: '%s'. Привітайся і запитай, що саме його цікавить у цьому товарі.",
-                            product.getName(), product.getPrice().toString(), product.getDescription()
-                    );
-
-                    String replyText = chatService.sendMessage(senderId, contextPrompt);
-                    interactionRepository.save(new Interaction(senderId, "AI", replyText));
-                    instagramMessageService.sendReply(senderId, replyText);
-                } catch (IOException e) {
-                    System.err.println("Помилка при відкладеній обробці поста: " + e.getMessage());
-                }
-            });
-        }
-    }
-
-    /**
-     * Extracts the 'asset_id' value from the Instagram CDN URL.
-     * @param url The URL from the attachment payload.
-     * @return The asset_id as a String, or null if not found.
-     */
     private String extractAssetIdFromUrl(String url) {
         try {
             java.net.URI uri = new java.net.URI(url);
             String query = uri.getQuery();
             if (query != null) {
-                String[] params = query.split("&");
-                for (String param : params) {
+                for (String param : query.split("&")) {
                     String[] pair = param.split("=");
                     if (pair.length == 2 && "asset_id".equals(pair[0])) {
                         return pair[1];
@@ -230,6 +248,3 @@ public class WebhookProcessingService {
         return null;
     }
 }
-
-
-
