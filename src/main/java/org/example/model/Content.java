@@ -1,8 +1,11 @@
 package org.example.model;
 
+import lombok.Data;
+
 import java.util.List;
 
+@Data
 public class Content {
-    public List<Part> parts;
-    public String role;
+    private List<Part> parts;
+    private String role;
 }

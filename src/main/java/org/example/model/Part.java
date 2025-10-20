@@ -1,5 +1,8 @@
 package org.example.model;
 
+import lombok.Data;
+
+@Data
 public class Part {
-    public String text;
+    private String text;
 }

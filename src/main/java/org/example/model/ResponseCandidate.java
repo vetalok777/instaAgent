@@ -1,5 +1,8 @@
 package org.example.model;
 
+import lombok.Data;
+
+@Data
 public class ResponseCandidate {
-    public Content content;
+    private Content content;
 }

@@ -54,14 +54,14 @@ public class GeminiChatService {
         }
 
         Part userPart = new Part();
-        userPart.text = finalUserMessage;
+        userPart.setText(finalUserMessage);
         Content userContent = new Content();
-        userContent.parts = List.of(userPart);
-        userContent.role = "user";
+        userContent.setParts(List.of(userPart));
+        userContent.setRole("user");
         conversationHistory.add(userContent);
 
         RequestPayload payload = new RequestPayload();
-        payload.contents = conversationHistory;
+        payload.setContents(conversationHistory);
 
         String jsonPayload = gson.toJson(payload);
         RequestBody body = RequestBody.create(jsonPayload, MediaType.get("application/json; charset=utf-8"));
@@ -79,8 +79,8 @@ public class GeminiChatService {
             String responseBody = response.body().string();
             ResponsePayload responsePayload = gson.fromJson(responseBody, ResponsePayload.class);
 
-            if (responsePayload.candidates != null && !responsePayload.candidates.isEmpty()) {
-                return responsePayload.candidates.get(0).content.parts.get(0).text;
+            if (responsePayload.getCandidates() != null && !responsePayload.getCandidates().isEmpty()) {
+                return responsePayload.getCandidates().get(0).getContent().getParts().get(0).getText();
             }
             return "Вибачте, сталася помилка. Не вдалося отримати відповідь.";
         }
@@ -95,10 +95,10 @@ public class GeminiChatService {
 
         for (Interaction interaction : interactions) {
             Part part = new Part();
-            part.text = interaction.getText();
+            part.setText(interaction.getText());
             Content content = new Content();
-            content.parts = List.of(part);
-            content.role = interaction.getAuthor().equalsIgnoreCase("AI") ? "model" : "user";
+            content.setParts(List.of(part));
+            content.setRole(interaction.getAuthor().equalsIgnoreCase("AI") ? "model" : "user");
             history.add(content);
         }
         return history;
@@ -182,10 +182,10 @@ public class GeminiChatService {
             }
             String systemPromptText = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
             Part systemPart = new Part();
-            systemPart.text = systemPromptText;
+            systemPart.setText(systemPromptText);
             Content systemContent = new Content();
-            systemContent.parts = List.of(systemPart);
-            systemContent.role = "user";
+            systemContent.setParts(List.of(systemPart));
+            systemContent.setRole("user");
             return systemContent;
         } catch (IOException e) {
             throw new RuntimeException("Failed to read system prompt", e);

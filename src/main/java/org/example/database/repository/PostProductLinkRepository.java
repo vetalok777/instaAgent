@@ -7,6 +7,5 @@ import java.util.Optional;
 
 public interface PostProductLinkRepository extends JpaRepository<PostProductLink, Long> {
 
-
     Optional<PostProductLink> findByInstagramPostId(String instagramPostId);
 }

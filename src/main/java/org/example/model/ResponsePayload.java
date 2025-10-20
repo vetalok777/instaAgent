@@ -1,7 +1,10 @@
 package org.example.model;
 
+import lombok.Data;
+
 import java.util.List;
 
+@Data
 public class ResponsePayload {
-    public List<ResponseCandidate> candidates;
+    private List<ResponseCandidate> candidates;
 }
