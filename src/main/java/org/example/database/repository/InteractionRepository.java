@@ -11,11 +11,14 @@ import java.util.List;
 public interface InteractionRepository extends JpaRepository<Interaction, Long> {
 
     /**
-     * Searching for the last 10 messages of senderId,
-     * sorting them by the time in descending order.
-     * @param senderId ID of the user from Instagram
+     * Finds the last 10 interactions for a specific user (sender) of a specific client,
+     * ordered by timestamp in descending order.
+     *
+     * @param clientId   The ID of the client.
+     * @param senderPsid The Page-Scoped ID of the user.
      * @return The list of 10 or fewer interactions
      */
-    List<Interaction> findTop10BySenderIdOrderByTimestampDesc(String senderId);
+    List<Interaction> findTop10ByClientIdAndSenderPsidOrderByTimestampDesc(Long clientId, String senderPsid);
+
     boolean existsByMessageId(String messageId);
 }
