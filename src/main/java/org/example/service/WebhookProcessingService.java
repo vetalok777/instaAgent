@@ -8,7 +8,6 @@ import org.example.database.repository.ClientRepository;
 import org.example.database.repository.InteractionRepository;
 import org.example.service.gemini.GeminiChatService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
@@ -60,7 +59,6 @@ public class WebhookProcessingService {
      *
      * @param payload The JSON string payload from the webhook.
      */
-    @Async
     @Transactional
     public void processWebhookPayload(String payload) {
         logger.info("Отримано повідомлення від Instagram: {}", payload);

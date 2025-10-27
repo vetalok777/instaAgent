@@ -63,7 +63,7 @@ public class WebhookController {
      * Handles incoming message payloads from the Instagram webhook.
      * <p>
      * This endpoint receives the JSON payload from the webhook as a raw string
-     * and passes it to the {@link WebhookProcessingService} for asynchronous processing.
+     * and passes it to the {@link WebhookProcessingService} for processing.
      *
      * @param payload The JSON payload from the webhook.
      * @return A {@link ResponseEntity} with an OK status to acknowledge receipt of the message.
