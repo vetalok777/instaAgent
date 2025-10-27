@@ -21,9 +21,6 @@ public class InstagramMessageService {
     private final OkHttpClient httpClient = new OkHttpClient();
     private final Gson gson = new Gson();
 
-    @Value("${instagram.access.token}")
-    private String accessToken;
-
     @Value("${instagram.graph.api.url}")
     private String graphApiUrl;
 
@@ -39,22 +36,22 @@ public class InstagramMessageService {
      * @param recipientId The Instagram user ID to send the reply to.
      * @param text        The text of the message to send.
      */
-    public void sendReply(String recipientId, String text) {
+    public void sendReply(String accessToken, String recipientId, String text) {
         // Check if the message needs to be split
         if (text.length() > 1000) {
             List<String> messageParts = splitMessage(text, 990);
             for (String part : messageParts) {
                 try {
-                    sendMessagePart(recipientId, part);
-                    Thread.sleep(1500); // Затримка між частинами
+                    sendMessagePart(accessToken, recipientId, part);
+                    Thread.sleep(1500);
                 } catch (IOException | InterruptedException e) {
                     System.err.println("Помилка надсилання частини повідомлення: " + e.getMessage());
-                    Thread.currentThread().interrupt(); // Відновлюємо статус переривання
+                    Thread.currentThread().interrupt();
                 }
             }
         } else {
             try {
-                sendMessagePart(recipientId, text);
+                sendMessagePart(accessToken, recipientId, text);
             } catch (IOException e) {
                 System.err.println("Помилка надсилання повідомлення: " + e.getMessage());
             }
@@ -68,7 +65,7 @@ public class InstagramMessageService {
      * @param text        The text of the message (or a part of it).
      * @throws IOException if an error occurs during the HTTP request execution.
      */
-    private void sendMessagePart(String recipientId, String text) throws IOException {
+    private void sendMessagePart(String accessToken, String recipientId, String text) throws IOException {
         String fullUrl = graphApiUrl + "/" + pageId + "/messages";
 
         JsonObject recipient = new JsonObject();
@@ -116,7 +113,7 @@ public class InstagramMessageService {
         return parts;
     }
 
-    public String getShortcodeFromAssetId(String assetId) {
+    public String getShortcodeFromAssetId(String accessToken, String assetId) {
         String url = graphApiUrl + "/" + assetId + "?fields=shortcode&access_token=" + accessToken;
 
         Request request = new Request.Builder()
@@ -140,4 +137,3 @@ public class InstagramMessageService {
         return null;
     }
 }
-

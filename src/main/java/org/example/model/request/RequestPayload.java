@@ -1,6 +1,7 @@
-package org.example.model;
+package org.example.model.request;
 
 import lombok.Data;
+import org.example.model.Content;
 
 import java.util.List;
 
