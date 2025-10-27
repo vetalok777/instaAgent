@@ -45,8 +45,7 @@ public class KnowledgeManagementService {
     @Transactional
     public void processAndStoreKnowledge(Long clientId, InputStream inputStream) throws IOException {
         Client client = clientRepository.findById(clientId)
-                .orElseThrow(() -> new IllegalArgumentException("Клієнт з ID " + clientId + " не знайдений."));
-
+                .orElseThrow(() -> new IllegalArgumentException("Client with ID " + clientId + " not found."));
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
             String line;
             StringBuilder paragraph = new StringBuilder();

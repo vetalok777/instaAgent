@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -21,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -54,7 +56,7 @@ class KnowledgeManagementServiceTest {
         knowledgeManagementService.processAndStoreKnowledge(clientId, inputStream);
 
         ArgumentCaptor<String> paragraphCaptor = ArgumentCaptor.forClass(String.class);
-        verify(ragService, times(3)).createAndStoreEmbedding(client, paragraphCaptor.capture());
+        verify(ragService, times(3)).createAndStoreEmbedding(eq(client), paragraphCaptor.capture());
 
         List<String> paragraphs = paragraphCaptor.getAllValues();
         assertEquals(
@@ -68,7 +70,7 @@ class KnowledgeManagementServiceTest {
     }
 
     @Test
-    void processAndStoreKnowledge_throwsExceptionWhenClientNotFound() {
+    void processAndStoreKnowledge_throwsExceptionWhenClientNotFound() throws IOException {
         when(clientRepository.findById(anyLong())).thenReturn(Optional.empty());
 
         InputStream inputStream = new ByteArrayInputStream("content".getBytes(StandardCharsets.UTF_8));

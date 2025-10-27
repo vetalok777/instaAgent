@@ -13,6 +13,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.io.IOException;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -64,7 +65,7 @@ class WebhookProcessingServiceTest {
     }
 
     @Test
-    void processWebhookPayload_shouldSkipWhenDuplicateMessage() {
+    void processWebhookPayload_shouldSkipWhenDuplicateMessage() throws IOException {
         when(clientRepository.findByInstagramPageId(PAGE_ID)).thenReturn(Optional.of(client));
         when(interactionRepository.existsByMessageId(MESSAGE_ID)).thenReturn(true);
 
@@ -87,7 +88,7 @@ class WebhookProcessingServiceTest {
     }
 
     @Test
-    void processWebhookPayload_shouldHandleSuccessfulScenario() {
+    void processWebhookPayload_shouldHandleSuccessfulScenario() throws IOException {
         when(clientRepository.findByInstagramPageId(PAGE_ID)).thenReturn(Optional.of(client));
         when(interactionRepository.existsByMessageId(MESSAGE_ID)).thenReturn(false);
         when(chatService.sendMessage(client, SENDER_ID, MESSAGE_TEXT)).thenReturn("AI Response");
