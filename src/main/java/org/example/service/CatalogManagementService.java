@@ -94,11 +94,23 @@ public class CatalogManagementService {
     }
 
     private String generateKnowledgeText(CatalogItem item) {
-        String attributes = item.getAttributes().entrySet().stream()
+        Map<String, String> attributesMap = item.getAttributes();
+        if (attributesMap == null) {
+            attributesMap = Map.of();
+            item.setAttributes(attributesMap);
+        }
+
+        String attributes = attributesMap.entrySet().stream()
                 .map(entry -> entry.getKey() + ": " + entry.getValue())
                 .collect(Collectors.joining(", "));
 
-        return String.format("Товар: %s (Артикул: %s). Опис: %s. Ціна: %s грн. В наявності: %d шт. Характеристики: %s.",
-                item.getName(), item.getSku(), item.getDescription(), item.getPrice(), item.getQuantity(), attributes);
+        String baseText = String.format("Товар: %s (Артикул: %s). Опис: %s. Ціна: %s грн. В наявності: %d шт.",
+                item.getName(), item.getSku(), item.getDescription(), item.getPrice(), item.getQuantity());
+
+        if (!attributes.isEmpty()) {
+            return baseText + " Характеристики: " + attributes + ".";
+        }
+
+        return baseText;
     }
 }
