@@ -7,6 +7,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,6 +22,8 @@ import java.util.List;
 public class InstagramMessageService {
     private final OkHttpClient httpClient = new OkHttpClient();
     private final Gson gson = new Gson();
+
+    private static final Logger logger = LoggerFactory.getLogger(InstagramMessageService.class);
 
     @Value("${instagram.graph.api.url}")
     private String graphApiUrl;
@@ -43,9 +47,8 @@ public class InstagramMessageService {
             for (String part : messageParts) {
                 try {
                     sendMessagePart(accessToken, recipientId, part);
-                    Thread.sleep(1500);
-                } catch (IOException | InterruptedException e) {
-                    System.err.println("Помилка надсилання частини повідомлення: " + e.getMessage());
+                } catch (IOException e) {
+                    logger.error("Помилка надсилання частини повідомлення: {}", e.getMessage(), e);
                     Thread.currentThread().interrupt();
                 }
             }
@@ -53,7 +56,7 @@ public class InstagramMessageService {
             try {
                 sendMessagePart(accessToken, recipientId, text);
             } catch (IOException e) {
-                System.err.println("Помилка надсилання повідомлення: " + e.getMessage());
+                logger.error("Помилка надсилання повідомлення: {}", e.getMessage(), e);
             }
         }
     }
@@ -90,9 +93,9 @@ public class InstagramMessageService {
 
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
-                System.err.println("Помилка надсилання відповіді: " + response.body().string());
+                logger.error("Помилка надсилання відповіді на URL [{}]: {}", fullUrl, response.body() != null ? response.body().string() : "Немає тіла відповіді");
             } else {
-                System.out.println("Відповідь успішно надіслано.");
+                logger.info("Відповідь успішно надіслано користувачу {}.", recipientId);
             }
         }
     }
@@ -123,7 +126,7 @@ public class InstagramMessageService {
 
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
-                System.err.println("Помилка отримання shortcode: " + response.body().string());
+                logger.error("Помилка отримання shortcode: {}", response.body() != null ? response.body().string() : "Немає тіла відповіді");
                 return null;
             }
             String responseBody = response.body().string();
@@ -132,7 +135,7 @@ public class InstagramMessageService {
                 return jsonObject.get("shortcode").getAsString();
             }
         } catch (IOException e) {
-            System.err.println("Помилка API-запиту для отримання shortcode: " + e.getMessage());
+            logger.error("Помилка API-запиту для отримання shortcode: {}", e.getMessage(), e);
         }
         return null;
     }

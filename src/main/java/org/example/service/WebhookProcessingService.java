@@ -11,6 +11,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Optional;
 
@@ -29,6 +31,8 @@ public class WebhookProcessingService {
     private final InstagramMessageService instagramMessageService;
     private final InteractionRepository interactionRepository;
     private final ClientRepository clientRepository;
+
+    private static final Logger logger = LoggerFactory.getLogger(WebhookProcessingService.class);
 
     /**
      * Constructs a new WebhookProcessingService with the required dependencies.
@@ -59,7 +63,7 @@ public class WebhookProcessingService {
     @Async
     @Transactional
     public void processWebhookPayload(String payload) {
-        System.out.println("Отримано повідомлення від Instagram: " + payload);
+        logger.info("Отримано повідомлення від Instagram: {}", payload);
         JsonObject data = gson.fromJson(payload, JsonObject.class);
 
         Client client = null;
@@ -69,7 +73,7 @@ public class WebhookProcessingService {
 
             Optional<Client> clientOptional = clientRepository.findByInstagramPageId(pageId);
             if (clientOptional.isEmpty()) {
-                System.err.println("Отримано повідомлення для незареєстрованої сторінки з ID: " + pageId + ". Ігноруємо.");
+                logger.warn("Отримано повідомлення для незареєстрованої сторінки з ID: {}. Ігноруємо.", pageId);
                 return;
             }
             client = clientOptional.get();
@@ -78,7 +82,7 @@ public class WebhookProcessingService {
             String senderPsid = messaging.getAsJsonObject("sender").get("id").getAsString();
 
             if (!messaging.has("message") || messaging.getAsJsonObject("message").has("is_echo")) {
-                System.out.println("Отримано системну подію (echo/read) або подію без повідомлення. Ігноруємо.");
+                logger.info("Отримано системну подію (echo/read) або подію без повідомлення. Ігноруємо.");
                 return;
             }
 
@@ -86,14 +90,14 @@ public class WebhookProcessingService {
 
             // Ignore non-text messages for now
             if (!messageObject.has("text")) {
-                System.out.println("Отримано не-текстове повідомлення. Ігноруємо.");
+                logger.info("Отримано не-текстове повідомлення. Ігноруємо.");
                 return;
             }
 
             String messageId = messageObject.get("mid").getAsString();
 
             if (interactionRepository.existsByMessageId(messageId)) {
-                System.out.println("Отримано дублікат повідомлення з ID: " + messageId + ". Ігноруємо.");
+                logger.info("Отримано дублікат повідомлення з ID: {}. Ігноруємо.", messageId);
                 return;
             }
 
@@ -116,7 +120,7 @@ public class WebhookProcessingService {
             // Send reply to user
             instagramMessageService.sendReply(client.getAccessToken(), senderPsid, replyText);
         } catch (Exception e) {
-            System.err.println("Помилка обробки повідомлення для клієнта '" + (client != null ? client.getClientName() : "N/A") + "': " + e.getClass().getName() + " - " + e.getMessage());
+            logger.error("Помилка обробки повідомлення для клієнта '{}': {} - {}", (client != null ? client.getClientName() : "N/A"), e.getClass().getName(), e.getMessage(), e);
             e.printStackTrace();
         }
     }
