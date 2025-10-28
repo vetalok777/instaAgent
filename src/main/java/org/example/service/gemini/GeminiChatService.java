@@ -15,6 +15,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -85,10 +87,18 @@ public class GeminiChatService {
     }
 
     private List<Content> buildConversationHistory(Client client, String userPsid) {
-        List<Content> history = new ArrayList<>();
-        history.add(createSystemPrompt(client));
-
         List<Interaction> interactions = interactionRepository.findTop10ByClientIdAndSenderPsidOrderByTimestampDesc(client.getId(), userPsid);
+        LocalDateTime lastUserMessageTime = interactions.stream()
+                .filter(interaction -> "USER".equalsIgnoreCase(interaction.getAuthor()))
+                .sorted(Comparator.comparing(Interaction::getTimestamp).reversed())
+                .skip(1)
+                .map(Interaction::getTimestamp)
+                .findFirst()
+                .orElse(null);
+
+        List<Content> history = new ArrayList<>();
+        history.add(createSystemPrompt(client, lastUserMessageTime));
+
         Collections.reverse(interactions);
 
         for (Interaction interaction : interactions) {
@@ -102,12 +112,54 @@ public class GeminiChatService {
         return history;
     }
 
-    private Content createSystemPrompt(Client client) {
+    private Content createSystemPrompt(Client client, LocalDateTime lastUserMessageTime) {
         Part systemPart = new Part();
-        systemPart.setText(client.getAiSystemPrompt());
+        systemPart.setText(buildSystemPromptWithInactivityInfo(client.getAiSystemPrompt(), lastUserMessageTime));
         Content systemContent = new Content();
         systemContent.setParts(List.of(systemPart));
         systemContent.setRole("user"); // System prompts are passed as 'user' role in the first turn
         return systemContent;
+    }
+
+    private String buildSystemPromptWithInactivityInfo(String basePrompt, LocalDateTime lastUserMessageTime) {
+        if (lastUserMessageTime == null) {
+            return basePrompt;
+        }
+
+        Duration sinceLastUserMessage = Duration.between(lastUserMessageTime, LocalDateTime.now());
+        if (sinceLastUserMessage.isNegative()) {
+            return basePrompt;
+        }
+
+        long days = sinceLastUserMessage.toDays();
+        long hours = sinceLastUserMessage.toHours() % 24;
+        long minutes = sinceLastUserMessage.toMinutes() % 60;
+
+        StringBuilder inactivityDescription = new StringBuilder("Остання активність користувача була ");
+        if (days > 0) {
+            inactivityDescription.append(days).append(days == 1 ? " день" : " дні");
+            if (hours > 0 || minutes > 0) {
+                inactivityDescription.append(" ");
+            }
+        }
+        if (hours > 0) {
+            inactivityDescription.append(hours).append(hours == 1 ? " година" : " годин");
+            if (minutes > 0) {
+                inactivityDescription.append(" ");
+            }
+        }
+        if (minutes > 0) {
+            inactivityDescription.append(minutes).append(minutes == 1 ? " хвилина" : " хвилин");
+        }
+
+        if (days == 0 && hours == 0 && minutes == 0) {
+            inactivityDescription.append("менше хвилини тому");
+        } else {
+            inactivityDescription.append(" тому");
+        }
+
+        inactivityDescription.append(". Якщо минуло 12 або більше годин, ввічливо привітайся знову. Якщо менше 12 годин — продовжуй спілкування без повторного привітання, якщо для контексту це не потрібно.");
+
+        return basePrompt + "\n\n" + inactivityDescription;
     }
 }
