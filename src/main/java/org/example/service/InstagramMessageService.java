@@ -69,7 +69,12 @@ public class InstagramMessageService {
      * @throws IOException if an error occurs during the HTTP request execution.
      */
     private void sendMessagePart(String accessToken, String recipientId, String text) throws IOException {
-        String fullUrl = graphApiUrl + "/" + pageId + "/messages";
+        HttpUrl url = HttpUrl.parse(graphApiUrl);
+        if (url == null) {
+            logger.error("Invalid base graphApiUrl: {}", graphApiUrl);
+            throw new IOException("Invalid base graphApiUrl: " + graphApiUrl);
+        }
+        HttpUrl fullUrl = url.newBuilder().addPathSegment(pageId).addPathSegment("messages").build();
 
         JsonObject recipient = new JsonObject();
         recipient.addProperty("id", recipientId);
