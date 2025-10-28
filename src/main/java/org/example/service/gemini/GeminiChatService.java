@@ -90,8 +90,10 @@ public class GeminiChatService {
         List<Interaction> interactions = interactionRepository.findTop10ByClientIdAndSenderPsidOrderByTimestampDesc(client.getId(), userPsid);
         LocalDateTime lastUserMessageTime = interactions.stream()
                 .filter(interaction -> "USER".equalsIgnoreCase(interaction.getAuthor()))
+                .sorted(Comparator.comparing(Interaction::getTimestamp).reversed())
+                .skip(1)
                 .map(Interaction::getTimestamp)
-                .max(LocalDateTime::compareTo)
+                .findFirst()
                 .orElse(null);
 
         List<Content> history = new ArrayList<>();
