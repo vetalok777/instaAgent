@@ -1,9 +1,12 @@
 package org.example.controller;
 
+import jakarta.validation.Valid;
+
 import org.example.database.entity.CatalogItem;
 import org.example.database.entity.Knowledge;
 import org.example.service.CatalogManagementService;
 import org.example.service.KnowledgeManagementService;
+import org.springframework.beans.BeanUtils;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -70,13 +73,13 @@ public class ManagementController {
      * Endpoint for updating a specific general knowledge entry.
      *
      * @param knowledgeId The ID of the knowledge entry to update.
-     * @param newContent  The new text content for the knowledge entry.
+     * @param request The new text content for the knowledge entry.
      * @return A response indicating the result of the operation.
      */
     @PutMapping("/knowledge/general/{knowledgeId}")
-    public ResponseEntity<String> updateGeneralKnowledge(@PathVariable Long knowledgeId, @RequestBody String newContent) {
+    public ResponseEntity<String> updateGeneralKnowledge(@PathVariable Long knowledgeId, @Valid @RequestBody org.example.model.request.UpdateKnowledgeRequest request) {
         try {
-            knowledgeManagementService.updateGeneralKnowledge(knowledgeId, newContent);
+            knowledgeManagementService.updateGeneralKnowledge(knowledgeId, request.getNewContent());
             return ResponseEntity.ok("Запис загальних знань ID " + knowledgeId + " успішно оновлено.");
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body("Помилка оновлення загальних знань: " + e.getMessage());
@@ -86,14 +89,16 @@ public class ManagementController {
     /**
      * Endpoint for creating a new catalog item.
      *
-     * @param item     The CatalogItem object from the request body.
+     * @param itemDto  The CatalogItem DTO from the request body.
      * @param clientId The ID of the client to whom this item belongs.
      * @return The created CatalogItem.
      */
     @PostMapping("/catalog-items")
-    public ResponseEntity<?> createCatalogItem(@RequestBody CatalogItem item, @RequestParam Long clientId) {
+    public ResponseEntity<?> createCatalogItem(@Valid @RequestBody org.example.model.dto.CatalogItemDto itemDto, @RequestParam Long clientId) {
         try {
-            CatalogItem createdItem = catalogManagementService.createCatalogItem(item, clientId);
+            CatalogItem newItem = new CatalogItem();
+            BeanUtils.copyProperties(itemDto, newItem);
+            CatalogItem createdItem = catalogManagementService.createCatalogItem(newItem, clientId);
             return ResponseEntity.ok(createdItem);
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body("Помилка створення товару: " + e.getMessage());
@@ -104,12 +109,14 @@ public class ManagementController {
      * Endpoint for updating an existing catalog item.
      *
      * @param itemId      The ID of the item to update.
-     * @param updatedItem The updated item data.
+     * @param itemDto     The updated item data.
      * @return The updated CatalogItem.
      */
     @PutMapping("/catalog-items/{itemId}")
-    public ResponseEntity<?> updateCatalogItem(@PathVariable Long itemId, @RequestBody CatalogItem updatedItem) {
+        public ResponseEntity<?> updateCatalogItem(@PathVariable Long itemId, @Valid @RequestBody org.example.model.dto.CatalogItemDto itemDto) {
         try {
+            CatalogItem updatedItem = new CatalogItem();
+            BeanUtils.copyProperties(itemDto, updatedItem);
             CatalogItem result = catalogManagementService.updateCatalogItem(itemId, updatedItem);
             return ResponseEntity.ok(result);
         } catch (Exception e) {

@@ -1,7 +1,8 @@
 package org.example.controller;
 
 import org.example.service.WebhookProcessingService;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,19 +18,26 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/webhook")
 public class WebhookController {
 
-    private final WebhookProcessingService processingService;
+    private static final String HUB_MODE_PARAM = "hub.mode";
+    private static final String HUB_VERIFY_TOKEN_PARAM = "hub.verify_token";
+    private static final String HUB_CHALLENGE_PARAM = "hub.challenge";
+    private static final String SUBSCRIBE_MODE = "subscribe";
 
-    @Value("${instagram.verify.token}")
-    private String verifyToken;
+    private static final Logger log = LoggerFactory.getLogger(WebhookController.class);
+
+    private final WebhookProcessingService processingService;
+    private final String verifyToken;
 
     /**
      * Constructs the controller and injects the required WebhookProcessingService.
      *
      * @param processingService The service responsible for processing webhook payloads.
+     * @param verifyToken       The token for webhook verification from application properties.
      */
-    @Autowired
-    public WebhookController(WebhookProcessingService processingService) {
+    public WebhookController(WebhookProcessingService processingService,
+                             @Value("${instagram.verify.token}") String verifyToken) {
         this.processingService = processingService;
+        this.verifyToken = verifyToken;
     }
 
     /**
@@ -47,12 +55,12 @@ public class WebhookController {
      */
     @GetMapping
     public ResponseEntity<String> verifyWebhook(
-            @RequestParam("hub.mode") String mode,
-            @RequestParam("hub.verify_token") String token,
-            @RequestParam("hub.challenge") String challenge) {
+            @RequestParam(HUB_MODE_PARAM) String mode,
+            @RequestParam(HUB_VERIFY_TOKEN_PARAM) String token,
+            @RequestParam(HUB_CHALLENGE_PARAM) String challenge) {
 
-        if ("subscribe".equals(mode) && verifyToken.equals(token)) {
-            System.out.println("WEBHOOK_VERIFIED");
+        if (SUBSCRIBE_MODE.equals(mode) && verifyToken.equals(token)) {
+            log.info("Webhook successfully verified.");
             return new ResponseEntity<>(challenge, HttpStatus.OK);
         } else {
             return new ResponseEntity<>(HttpStatus.FORBIDDEN);
@@ -70,7 +78,11 @@ public class WebhookController {
      */
     @PostMapping
     public ResponseEntity<Void> handleMessage(@RequestBody String payload) {
-        processingService.processWebhookPayload(payload);
+        try {
+            processingService.processWebhookPayload(payload);
+        } catch (Exception e) {
+            log.error("Error submitting webhook payload for processing.", e);
+        }
         return new ResponseEntity<>(HttpStatus.OK);
     }
 }

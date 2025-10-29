@@ -2,6 +2,8 @@ package org.example.controller;
 
 import org.example.database.entity.CatalogItem;
 import org.example.database.entity.Knowledge;
+import org.example.model.request.UpdateKnowledgeRequest;
+import org.example.model.dto.CatalogItemDto;
 import org.example.service.CatalogManagementService;
 import org.example.service.KnowledgeManagementService;
 import org.junit.jupiter.api.Test;
@@ -12,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.beans.BeanUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
@@ -116,9 +119,12 @@ class ManagementControllerTest {
     void updateGeneralKnowledge_success() throws IOException {
         Long knowledgeId = 10L;
         String newContent = "Updated content";
+        UpdateKnowledgeRequest request = new UpdateKnowledgeRequest();
+        request.setNewContent(newContent);
+
         doNothing().when(knowledgeManagementService).updateGeneralKnowledge(anyLong(), anyString());
 
-        ResponseEntity<String> response = managementController.updateGeneralKnowledge(knowledgeId, newContent);
+        ResponseEntity<String> response = managementController.updateGeneralKnowledge(knowledgeId, request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals("Запис загальних знань ID " + knowledgeId + " успішно оновлено.", response.getBody());
@@ -129,10 +135,12 @@ class ManagementControllerTest {
     void updateGeneralKnowledge_serviceThrowsException() throws IOException {
         Long knowledgeId = 10L;
         String newContent = "Updated content";
+        UpdateKnowledgeRequest request = new UpdateKnowledgeRequest();
+        request.setNewContent(newContent);
         String errorMessage = "Update failed";
         doThrow(new IOException(errorMessage)).when(knowledgeManagementService).updateGeneralKnowledge(anyLong(), anyString());
 
-        ResponseEntity<String> response = managementController.updateGeneralKnowledge(knowledgeId, newContent);
+        ResponseEntity<String> response = managementController.updateGeneralKnowledge(knowledgeId, request);
 
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
         assertEquals("Помилка оновлення загальних знань: " + errorMessage, response.getBody());
@@ -141,11 +149,12 @@ class ManagementControllerTest {
 
     @Test
     void createCatalogItem_success() throws IOException {
-        CatalogItem itemToCreate = new CatalogItem();
+        CatalogItemDto itemToCreate = new CatalogItemDto();
         itemToCreate.setName("New Product");
+
         CatalogItem createdItem = new CatalogItem();
         createdItem.setId(1L);
-        createdItem.setName("New Product");
+        BeanUtils.copyProperties(itemToCreate, createdItem);
 
         when(catalogManagementService.createCatalogItem(any(CatalogItem.class), anyLong())).thenReturn(createdItem);
 
@@ -153,12 +162,13 @@ class ManagementControllerTest {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(createdItem, response.getBody());
-        verify(catalogManagementService, times(1)).createCatalogItem(eq(itemToCreate), eq(testClientId));
+        // We verify that the service is called with any CatalogItem and the correct client ID
+        verify(catalogManagementService, times(1)).createCatalogItem(any(CatalogItem.class), eq(testClientId));
     }
 
     @Test
     void createCatalogItem_serviceThrowsException() throws IOException {
-        CatalogItem itemToCreate = new CatalogItem();
+        CatalogItemDto itemToCreate = new CatalogItemDto();
         String errorMessage = "Failed to create item";
         doThrow(new RuntimeException(errorMessage)).when(catalogManagementService).createCatalogItem(any(CatalogItem.class), anyLong());
 
@@ -166,17 +176,18 @@ class ManagementControllerTest {
 
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
         assertEquals("Помилка створення товару: " + errorMessage, response.getBody());
-        verify(catalogManagementService, times(1)).createCatalogItem(eq(itemToCreate), eq(testClientId));
+        verify(catalogManagementService, times(1)).createCatalogItem(any(CatalogItem.class), eq(testClientId));
     }
 
     @Test
     void updateCatalogItem_success() throws IOException {
         Long itemId = 2L;
-        CatalogItem updatedItemRequest = new CatalogItem();
+        CatalogItemDto updatedItemRequest = new CatalogItemDto();
         updatedItemRequest.setName("Updated Product");
+
         CatalogItem returnedItem = new CatalogItem();
         returnedItem.setId(itemId);
-        returnedItem.setName("Updated Product");
+        BeanUtils.copyProperties(updatedItemRequest, returnedItem);
 
         when(catalogManagementService.updateCatalogItem(anyLong(), any(CatalogItem.class))).thenReturn(returnedItem);
 
@@ -184,13 +195,14 @@ class ManagementControllerTest {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(returnedItem, response.getBody());
-        verify(catalogManagementService, times(1)).updateCatalogItem(eq(itemId), eq(updatedItemRequest));
+        verify(catalogManagementService, times(1)).updateCatalogItem(eq(itemId), any(CatalogItem.class));
     }
 
     @Test
     void updateCatalogItem_serviceThrowsException() throws IOException {
         Long itemId = 2L;
-        CatalogItem updatedItemRequest = new CatalogItem();
+        CatalogItemDto updatedItemRequest = new CatalogItemDto();
+        updatedItemRequest.setName("Updated Product");
         String errorMessage = "Failed to update item";
         doThrow(new RuntimeException(errorMessage)).when(catalogManagementService).updateCatalogItem(anyLong(), any(CatalogItem.class));
 
@@ -198,7 +210,7 @@ class ManagementControllerTest {
 
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
         assertEquals("Помилка оновлення товару: " + errorMessage, response.getBody());
-        verify(catalogManagementService, times(1)).updateCatalogItem(eq(itemId), eq(updatedItemRequest));
+        verify(catalogManagementService, times(1)).updateCatalogItem(eq(itemId), any(CatalogItem.class));
     }
 
     @Test
