@@ -1,6 +1,8 @@
 package org.example.service.gemini;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import okhttp3.*;
 import org.example.database.entity.Client;
 import org.example.database.entity.Interaction;
@@ -9,7 +11,6 @@ import org.example.model.Content;
 import org.example.model.Part;
 import org.example.model.request.RequestPayload;
 import org.example.model.response.ResponsePayload;
-import org.example.service.RAGService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -27,15 +28,13 @@ public class GeminiChatService {
     @Value("${gemini.api.key}")
     private String apiKey;
     private final InteractionRepository interactionRepository;
-    private final RAGService ragService;
 
     private final OkHttpClient httpClient;
     private final Gson gson = new Gson();
 
     @Autowired
-    public GeminiChatService(InteractionRepository interactionRepository, RAGService ragService) {
+    public GeminiChatService(InteractionRepository interactionRepository) {
         this.interactionRepository = interactionRepository;
-        this.ragService = ragService;
 
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(60, TimeUnit.SECONDS)
@@ -46,15 +45,9 @@ public class GeminiChatService {
 
     public String sendMessage(Client client, String userPsid, String userMessage) throws IOException {
         List<Content> conversationHistory = buildConversationHistory(client, userPsid);
-        String ragContext = ragService.findRelevantContext(client, userMessage, 3);
-
-        String finalUserMessage = userMessage;
-        if (!ragContext.isEmpty()) {
-            finalUserMessage = ragContext + "\n\nОсь запит від клієнта: \"" + userMessage + "\". Дай відповідь на основі контексту вище.";
-        }
 
         Part userPart = new Part();
-        userPart.setText(finalUserMessage);
+        userPart.setText(userMessage);
         Content userContent = new Content();
         userContent.setParts(List.of(userPart));
         userContent.setRole("user");
@@ -62,6 +55,20 @@ public class GeminiChatService {
 
         RequestPayload payload = new RequestPayload();
         payload.setContents(conversationHistory);
+
+        // Add File Search tool configuration
+        if (client.getFileSearchStoreId() != null && !client.getFileSearchStoreId().isEmpty()) {
+            JsonObject fileSearchTool = new JsonObject();
+            JsonObject fileSearch = new JsonObject();
+            JsonArray fileSearchStoreNames = new JsonArray();
+            fileSearchStoreNames.add(client.getFileSearchStoreId());
+            fileSearch.add("fileSearchStoreNames", fileSearchStoreNames);
+            fileSearchTool.add("fileSearch", fileSearch);
+
+            JsonArray tools = new JsonArray();
+            tools.add(fileSearchTool);
+            payload.setTools(tools);
+        }
 
         String jsonPayload = gson.toJson(payload);
         RequestBody body = RequestBody.create(jsonPayload, MediaType.get("application/json; charset=utf-8"));

@@ -30,4 +30,6 @@ public class Client {
     @Column(name = "ai_system_prompt", nullable = false, columnDefinition = "TEXT")
     private String aiSystemPrompt;
 
+    @Column(name = "file_search_store_id")
+    private String fileSearchStoreId;
 }

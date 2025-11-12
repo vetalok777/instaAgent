@@ -4,6 +4,7 @@ import org.example.database.entity.CatalogItem;
 import org.example.database.entity.Client;
 import org.example.database.repository.CatalogItemRepository;
 import org.example.database.repository.ClientRepository;
+import org.example.service.gemini.FileSearchService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,31 +14,37 @@ import java.util.stream.Collectors;
 
 /**
  * Manages the lifecycle of catalog items, ensuring synchronization
- * between the structured catalog and the vectorized knowledge base.
+ * between the structured catalog and the File Search store.
  */
 @Service
 public class CatalogManagementService {
 
     private final CatalogItemRepository catalogItemRepository;
     private final ClientRepository clientRepository;
-    private final RAGService ragService;
+    private final FileSearchService fileSearchService;
 
     public CatalogManagementService(CatalogItemRepository catalogItemRepository,
                                     ClientRepository clientRepository,
-                                    RAGService ragService) {
+                                    FileSearchService fileSearchService) {
         this.catalogItemRepository = catalogItemRepository;
         this.clientRepository = clientRepository;
-        this.ragService = ragService;
+        this.fileSearchService = fileSearchService;
     }
 
     /**
-     * Creates a new catalog item and generates its corresponding knowledge base embedding.
+     * Creates a new catalog item and uploads its data to the File Search store.
      */
     @Transactional
-    public CatalogItem createCatalogItem(CatalogItem item, Long clientId) throws IOException {
+    public CatalogItem createCatalogItem(CatalogItem item, Long clientId) throws IOException, InterruptedException {
         Client client = clientRepository.findById(clientId)
                 .orElseThrow(() -> new IllegalArgumentException("Клієнт з ID " + clientId + " не знайдений."));
         item.setClient(client);
+
+        if (client.getFileSearchStoreId() == null || client.getFileSearchStoreId().isEmpty()) {
+            String storeId = fileSearchService.createFileSearchStore("store_for_client_" + clientId);
+            client.setFileSearchStoreId(storeId);
+            clientRepository.save(client);
+        }
 
         CatalogItem savedItem = catalogItemRepository.save(item);
         synchronizeKnowledge(savedItem);
@@ -45,14 +52,22 @@ public class CatalogManagementService {
     }
 
     /**
-     * Updates an existing catalog item and re-generates its knowledge base embedding.
+     * Updates an existing catalog item and re-uploads its data to the File Search store.
      */
     @Transactional
-    public CatalogItem updateCatalogItem(Long itemId, CatalogItem updatedItemData) throws IOException {
+    public CatalogItem updateCatalogItem(Long itemId, CatalogItem updatedItemData) throws IOException, InterruptedException {
         CatalogItem existingItem = catalogItemRepository.findById(itemId)
                 .orElseThrow(() -> new IllegalArgumentException("Товар з ID " + itemId + " не знайдено."));
 
-        // Оновлюємо поля
+        if (existingItem.getFileId() != null && !existingItem.getFileId().isEmpty()) {
+            try {
+                fileSearchService.deleteFile(existingItem.getFileId());
+            } catch (IOException e) {
+                // Log the error, but continue with the update
+                System.err.println("Error deleting old file: " + e.getMessage());
+            }
+        }
+
         existingItem.setName(updatedItemData.getName());
         existingItem.setDescription(updatedItemData.getDescription());
         existingItem.setPrice(updatedItemData.getPrice());
@@ -65,32 +80,27 @@ public class CatalogManagementService {
     }
 
     /**
-     * Deletes a catalog item and all associated knowledge base entries.
+     * Deletes a catalog item and its corresponding file from the File Search store.
      */
     @Transactional
-    public void deleteCatalogItem(Long itemId) {
-        if (!catalogItemRepository.existsById(itemId)) {
-            throw new IllegalArgumentException("Товар з ID " + itemId + " не знайдено.");
+    public void deleteCatalogItem(Long itemId) throws IOException {
+        CatalogItem item = catalogItemRepository.findById(itemId)
+                .orElseThrow(() -> new IllegalArgumentException("Товар з ID " + itemId + " не знайдено."));
+
+        if (item.getFileId() != null && !item.getFileId().isEmpty()) {
+            fileSearchService.deleteFile(item.getFileId());
         }
-        // Видалення векторних знань, пов'язаних з цим товаром
-        ragService.deleteKnowledgeForCatalogItem(itemId);
-        // Видалення самого товару
         catalogItemRepository.deleteById(itemId);
     }
 
     /**
-     * Synchronizes the knowledge base for a given catalog item.
-     * It first deletes old entries and then creates a new one based on the current item state.
+     * Synchronizes the File Search store for a given catalog item.
      */
-    private void synchronizeKnowledge(CatalogItem item) throws IOException {
-        // 1. Видалити старі знання, пов'язані з цим товаром
-        ragService.deleteKnowledgeForCatalogItem(item.getId());
-
-        // 2. Створити новий текстовий опис на основі актуальних даних
+    private void synchronizeKnowledge(CatalogItem item) throws IOException, InterruptedException {
         String knowledgeText = generateKnowledgeText(item);
-
-        // 3. Створити новий векторний запис у базі знань
-        ragService.createAndStoreEmbedding(item.getClient(), knowledgeText, item);
+        String fileId = fileSearchService.uploadFile(item.getClient().getFileSearchStoreId(), "item-" + item.getId() + ".txt", knowledgeText);
+        item.setFileId(fileId);
+        catalogItemRepository.save(item);
     }
 
     private String generateKnowledgeText(CatalogItem item) {
