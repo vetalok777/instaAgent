@@ -3,7 +3,6 @@ package org.example.controller;
 import jakarta.validation.Valid;
 
 import org.example.database.entity.CatalogItem;
-import org.example.database.entity.Knowledge;
 import org.example.service.CatalogManagementService;
 import org.example.service.KnowledgeManagementService;
 import org.springframework.beans.BeanUtils;
@@ -51,42 +50,6 @@ public class ManagementController {
     }
 
     /**
-     * Endpoint for retrieving all general knowledge entries for a specific client.
-     * General knowledge entries are those not linked to a specific catalog item.
-     *
-     * @param clientId The ID of the client.
-     * @return A list of general {@link Knowledge} entries.
-     */
-    @GetMapping("/knowledge/general")
-    public ResponseEntity<?> getGeneralKnowledge(@RequestParam Long clientId) {
-        try {
-            List<Knowledge> generalKnowledge = knowledgeManagementService.getGeneralKnowledge(clientId);
-            return ResponseEntity.ok(generalKnowledge);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("Помилка отримання загальних знань: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Endpoint for updating a specific general knowledge entry.
-     *
-     * @param knowledgeId The ID of the knowledge entry to update.
-     * @param request The new text content for the knowledge entry.
-     * @return A response indicating the result of the operation.
-     */
-    @PutMapping("/knowledge/general/{knowledgeId}")
-    public ResponseEntity<String> updateGeneralKnowledge(@PathVariable Long knowledgeId, @Valid @RequestBody org.example.model.request.UpdateKnowledgeRequest request) {
-        try {
-            knowledgeManagementService.updateGeneralKnowledge(knowledgeId, request.getNewContent());
-            return ResponseEntity.ok("Запис загальних знань ID " + knowledgeId + " успішно оновлено.");
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("Помилка оновлення загальних знань: " + e.getMessage());
-        }
-    }
-
-    /**
      * Endpoint for creating a new catalog item.
      *
      * @param itemDto  The CatalogItem DTO from the request body.
@@ -126,7 +89,11 @@ public class ManagementController {
 
     @DeleteMapping("/catalog-items/{itemId}")
     public ResponseEntity<Void> deleteCatalogItem(@PathVariable Long itemId) {
-        catalogManagementService.deleteCatalogItem(itemId);
-        return ResponseEntity.noContent().build();
+        try {
+            catalogManagementService.deleteCatalogItem(itemId);
+            return ResponseEntity.noContent().build();
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
     }
 }

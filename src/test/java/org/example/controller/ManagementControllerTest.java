@@ -1,8 +1,6 @@
 package org.example.controller;
 
 import org.example.database.entity.CatalogItem;
-import org.example.database.entity.Knowledge;
-import org.example.model.request.UpdateKnowledgeRequest;
 import org.example.model.dto.CatalogItemDto;
 import org.example.service.CatalogManagementService;
 import org.example.service.KnowledgeManagementService;
@@ -19,7 +17,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.*;
@@ -80,75 +77,7 @@ class ManagementControllerTest {
     }
 
     @Test
-    void getGeneralKnowledge_success() {
-        List<Knowledge> expectedKnowledge = List.of(new Knowledge(), new Knowledge());
-        when(knowledgeManagementService.getGeneralKnowledge(testClientId)).thenReturn(expectedKnowledge);
-
-        ResponseEntity<?> response = managementController.getGeneralKnowledge(testClientId);
-
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(expectedKnowledge, response.getBody());
-        verify(knowledgeManagementService, times(1)).getGeneralKnowledge(eq(testClientId));
-    }
-
-    @Test
-    void getGeneralKnowledge_clientNotFound() {
-        String errorMessage = "Клієнт з ID " + testClientId + " не знайдений.";
-        doThrow(new IllegalArgumentException(errorMessage)).when(knowledgeManagementService).getGeneralKnowledge(anyLong());
-
-        ResponseEntity<?> response = managementController.getGeneralKnowledge(testClientId);
-
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertEquals(errorMessage, response.getBody());
-        verify(knowledgeManagementService, times(1)).getGeneralKnowledge(eq(testClientId));
-    }
-
-    @Test
-    void getGeneralKnowledge_serviceThrowsGenericException() {
-        String errorMessage = "Some unexpected error";
-        doThrow(new RuntimeException(errorMessage)).when(knowledgeManagementService).getGeneralKnowledge(anyLong());
-
-        ResponseEntity<?> response = managementController.getGeneralKnowledge(testClientId);
-
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-        assertEquals("Помилка отримання загальних знань: " + errorMessage, response.getBody());
-        verify(knowledgeManagementService, times(1)).getGeneralKnowledge(eq(testClientId));
-    }
-
-    @Test
-    void updateGeneralKnowledge_success() throws IOException {
-        Long knowledgeId = 10L;
-        String newContent = "Updated content";
-        UpdateKnowledgeRequest request = new UpdateKnowledgeRequest();
-        request.setNewContent(newContent);
-
-        doNothing().when(knowledgeManagementService).updateGeneralKnowledge(anyLong(), anyString());
-
-        ResponseEntity<String> response = managementController.updateGeneralKnowledge(knowledgeId, request);
-
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals("Запис загальних знань ID " + knowledgeId + " успішно оновлено.", response.getBody());
-        verify(knowledgeManagementService, times(1)).updateGeneralKnowledge(eq(knowledgeId), eq(newContent));
-    }
-
-    @Test
-    void updateGeneralKnowledge_serviceThrowsException() throws IOException {
-        Long knowledgeId = 10L;
-        String newContent = "Updated content";
-        UpdateKnowledgeRequest request = new UpdateKnowledgeRequest();
-        request.setNewContent(newContent);
-        String errorMessage = "Update failed";
-        doThrow(new IOException(errorMessage)).when(knowledgeManagementService).updateGeneralKnowledge(anyLong(), anyString());
-
-        ResponseEntity<String> response = managementController.updateGeneralKnowledge(knowledgeId, request);
-
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-        assertEquals("Помилка оновлення загальних знань: " + errorMessage, response.getBody());
-        verify(knowledgeManagementService, times(1)).updateGeneralKnowledge(eq(knowledgeId), eq(newContent));
-    }
-
-    @Test
-    void createCatalogItem_success() throws IOException {
+    void createCatalogItem_success() throws Exception {
         CatalogItemDto itemToCreate = new CatalogItemDto();
         itemToCreate.setName("New Product");
 
@@ -167,7 +96,7 @@ class ManagementControllerTest {
     }
 
     @Test
-    void createCatalogItem_serviceThrowsException() throws IOException {
+    void createCatalogItem_serviceThrowsException() throws Exception {
         CatalogItemDto itemToCreate = new CatalogItemDto();
         String errorMessage = "Failed to create item";
         doThrow(new RuntimeException(errorMessage)).when(catalogManagementService).createCatalogItem(any(CatalogItem.class), anyLong());
@@ -180,7 +109,7 @@ class ManagementControllerTest {
     }
 
     @Test
-    void updateCatalogItem_success() throws IOException {
+    void updateCatalogItem_success() throws Exception {
         Long itemId = 2L;
         CatalogItemDto updatedItemRequest = new CatalogItemDto();
         updatedItemRequest.setName("Updated Product");
@@ -199,7 +128,7 @@ class ManagementControllerTest {
     }
 
     @Test
-    void updateCatalogItem_serviceThrowsException() throws IOException {
+    void updateCatalogItem_serviceThrowsException() throws Exception {
         Long itemId = 2L;
         CatalogItemDto updatedItemRequest = new CatalogItemDto();
         updatedItemRequest.setName("Updated Product");
@@ -214,7 +143,7 @@ class ManagementControllerTest {
     }
 
     @Test
-    void deleteCatalogItem_success() {
+    void deleteCatalogItem_success() throws Exception {
         Long itemId = 3L;
         doNothing().when(catalogManagementService).deleteCatalogItem(anyLong());
 

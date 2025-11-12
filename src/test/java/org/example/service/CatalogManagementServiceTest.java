@@ -4,13 +4,13 @@ import org.example.database.entity.CatalogItem;
 import org.example.database.entity.Client;
 import org.example.database.repository.CatalogItemRepository;
 import org.example.database.repository.ClientRepository;
+import org.example.service.gemini.FileSearchService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.Map;
 import java.util.Optional;
@@ -23,25 +23,20 @@ class CatalogManagementServiceTest {
 
     private CatalogItemRepository catalogItemRepository;
     private ClientRepository clientRepository;
-    private RAGService ragService;
+    private FileSearchService fileSearchService;
     private CatalogManagementService catalogManagementService;
-    private Method generateKnowledgeTextMethod;
 
     @BeforeEach
-    void setUp() throws NoSuchMethodException {
+    void setUp() {
         catalogItemRepository = Mockito.mock(CatalogItemRepository.class);
         clientRepository = Mockito.mock(ClientRepository.class);
-        ragService = Mockito.mock(RAGService.class);
+        fileSearchService = Mockito.mock(FileSearchService.class);
 
         catalogManagementService = new CatalogManagementService(
                 catalogItemRepository,
                 clientRepository,
-                ragService
+                fileSearchService
         );
-
-        generateKnowledgeTextMethod = CatalogManagementService.class
-                .getDeclaredMethod("generateKnowledgeText", CatalogItem.class);
-        generateKnowledgeTextMethod.setAccessible(true);
     }
 
     @Test
@@ -56,17 +51,18 @@ class CatalogManagementServiceTest {
             saved.setId(10L);
             return saved;
         });
+        when(fileSearchService.uploadFile(anyString(), anyString(), anyString())).thenReturn("file-id-123");
 
         CatalogItem result = catalogManagementService.createCatalogItem(item, 1L);
 
         ArgumentCaptor<CatalogItem> catalogItemCaptor = ArgumentCaptor.forClass(CatalogItem.class);
-        verify(catalogItemRepository).save(catalogItemCaptor.capture());
+        verify(catalogItemRepository, times(2)).save(catalogItemCaptor.capture());
         assertSame(client, catalogItemCaptor.getValue().getClient());
         assertSame(result, catalogItemCaptor.getValue());
+        assertEquals("file-id-123", result.getFileId());
 
-        verify(ragService).deleteKnowledgeForCatalogItem(10L);
         ArgumentCaptor<String> knowledgeCaptor = ArgumentCaptor.forClass(String.class);
-        verify(ragService).createAndStoreEmbedding(eq(client), knowledgeCaptor.capture(), same(result));
+        verify(fileSearchService).uploadFile(eq(client.getFileSearchStoreId()), eq("item-10.txt"), knowledgeCaptor.capture());
 
         String knowledgeText = knowledgeCaptor.getValue();
         String expectedBase = "Товар: Test name (Артикул: SKU123). Опис: Test description. Ціна: 199.99 грн. В наявності: 5 шт.";
@@ -80,6 +76,7 @@ class CatalogManagementServiceTest {
         existingItem.setId(5L);
         existingItem.setClient(buildClient());
         existingItem.setAttributes(Map.of("Стан", "Новий"));
+        existingItem.setFileId("old-file-id");
 
         CatalogItem updatedItem = new CatalogItem();
         updatedItem.setName("Updated name");
@@ -90,6 +87,7 @@ class CatalogManagementServiceTest {
 
         when(catalogItemRepository.findById(5L)).thenReturn(Optional.of(existingItem));
         when(catalogItemRepository.save(existingItem)).thenReturn(existingItem);
+        when(fileSearchService.uploadFile(anyString(), anyString(), anyString())).thenReturn("new-file-id");
 
         CatalogItem result = catalogManagementService.updateCatalogItem(5L, updatedItem);
 
@@ -99,11 +97,11 @@ class CatalogManagementServiceTest {
         assertEquals(new BigDecimal("149.49"), existingItem.getPrice());
         assertEquals(8, existingItem.getQuantity());
         assertEquals(Map.of("Колір", "Білий", "Матеріал", "Бавовна"), existingItem.getAttributes());
+        assertEquals("new-file-id", result.getFileId());
 
-        verify(catalogItemRepository).save(existingItem);
-        verify(ragService).deleteKnowledgeForCatalogItem(5L);
+        verify(fileSearchService).deleteFile("old-file-id");
         ArgumentCaptor<String> knowledgeCaptor = ArgumentCaptor.forClass(String.class);
-        verify(ragService).createAndStoreEmbedding(eq(existingItem.getClient()), knowledgeCaptor.capture(), same(existingItem));
+        verify(fileSearchService).uploadFile(eq(existingItem.getClient().getFileSearchStoreId()), eq("item-5.txt"), knowledgeCaptor.capture());
 
         String knowledgeText = knowledgeCaptor.getValue();
         String expectedBase = "Товар: Updated name (Артикул: SKU123). Опис: Updated description. Ціна: 149.49 грн. В наявності: 8 шт.";
@@ -113,50 +111,26 @@ class CatalogManagementServiceTest {
     }
 
     @Test
-    void deleteCatalogItem_removesKnowledgeAndRepositoryEntry() {
-        when(catalogItemRepository.existsById(7L)).thenReturn(true);
+    void deleteCatalogItem_removesKnowledgeAndRepositoryEntry() throws IOException {
+        CatalogItem item = buildCatalogItem();
+        item.setId(7L);
+        item.setFileId("file-to-delete");
+        when(catalogItemRepository.findById(7L)).thenReturn(Optional.of(item));
 
         catalogManagementService.deleteCatalogItem(7L);
 
-        verify(ragService).deleteKnowledgeForCatalogItem(7L);
+        verify(fileSearchService).deleteFile("file-to-delete");
         verify(catalogItemRepository).deleteById(7L);
     }
 
     @Test
-    void deleteCatalogItem_whenItemMissingThrowsIllegalArgumentException() {
-        when(catalogItemRepository.existsById(99L)).thenReturn(false);
+    void deleteCatalogItem_whenItemMissingThrowsIllegalArgumentException() throws Exception {
+        when(catalogItemRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class, () -> catalogManagementService.deleteCatalogItem(99L));
 
-        verify(ragService, never()).deleteKnowledgeForCatalogItem(anyLong());
+        verify(fileSearchService, never()).deleteFile(anyString());
         verify(catalogItemRepository, never()).deleteById(anyLong());
-    }
-
-    @Test
-    void generateKnowledgeText_withAttributes_includesFormattedAttributes() throws InvocationTargetException, IllegalAccessException {
-        CatalogItem item = buildCatalogItem();
-        item.setAttributes(Map.of("Колір", "Чорний", "Розмір", "L"));
-
-        String knowledgeText = (String) generateKnowledgeTextMethod.invoke(catalogManagementService, item);
-
-        String baseText = "Товар: Test name (Артикул: SKU123). Опис: Test description. Ціна: 199.99 грн. В наявності: 5 шт.";
-        assertTrue(knowledgeText.startsWith(baseText));
-        assertTrue(knowledgeText.contains("Характеристики:"));
-        assertTrue(knowledgeText.contains("Колір: Чорний"));
-        assertTrue(knowledgeText.contains("Розмір: L"));
-    }
-
-    @Test
-    void generateKnowledgeText_withoutAttributes_omitsAttributesSectionAndInitializesMap() throws InvocationTargetException, IllegalAccessException {
-        CatalogItem item = buildCatalogItem();
-        item.setAttributes(null);
-
-        String knowledgeText = (String) generateKnowledgeTextMethod.invoke(catalogManagementService, item);
-
-        assertEquals("Товар: Test name (Артикул: SKU123). Опис: Test description. Ціна: 199.99 грн. В наявності: 5 шт.",
-                knowledgeText);
-        assertNotNull(item.getAttributes());
-        assertTrue(item.getAttributes().isEmpty());
     }
 
     private CatalogItem buildCatalogItem() {
@@ -176,6 +150,7 @@ class CatalogManagementServiceTest {
         client.setInstagramPageId("page_id");
         client.setAccessToken("token");
         client.setAiSystemPrompt("prompt");
+        client.setFileSearchStoreId("store-id-123");
         return client;
     }
 }
