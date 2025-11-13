@@ -3,7 +3,6 @@ package org.example.controller;
 import jakarta.validation.Valid;
 
 import org.example.database.entity.CatalogItem;
-import org.example.database.entity.Knowledge;
 import org.example.service.CatalogManagementService;
 import org.example.service.KnowledgeManagementService;
 import org.springframework.beans.BeanUtils;
@@ -11,11 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
 
-/**
- * Controller for handling management tasks, such as knowledge base updates.
- */
 @RestController
 @RequestMapping("/api/v1/management")
 public class ManagementController {
@@ -30,12 +25,7 @@ public class ManagementController {
     }
 
     /**
-     * Endpoint for uploading a text file to populate a client's knowledge base.
-     * The file is processed paragraph by paragraph.
-     *
-     * @param file     The text file to upload.
-     * @param clientId The ID of the client to associate the knowledge with.
-     * @return A response indicating the result of the operation.
+     * Завантажує файл (PDF/TXT) із загальними знаннями.
      */
     @PostMapping("/knowledge/upload")
     public ResponseEntity<String> uploadKnowledgeFile(@RequestParam("file") MultipartFile file, @RequestParam("clientId") Long clientId) {
@@ -43,55 +33,21 @@ public class ManagementController {
             return ResponseEntity.badRequest().body("Файл порожній!");
         }
         try {
-            knowledgeManagementService.processAndStoreKnowledge(clientId, file.getInputStream());
-            return ResponseEntity.ok("Базу знань для клієнта ID " + clientId + " успішно оновлено.");
+            knowledgeManagementService.processAndStoreKnowledge(
+                    clientId,
+                    file.getInputStream(),
+                    file.getOriginalFilename(),
+                    file.getContentType() != null ? file.getContentType() : "text/plain"
+            );
+            return ResponseEntity.ok("Базу знань (загальну) для клієнта ID " + clientId + " успішно оновлено.");
         } catch (Exception e) {
+            logger.error("Помилка під час завантаження файлу знань", e);
             return ResponseEntity.internalServerError().body("Помилка під час обробки файлу: " + e.getMessage());
         }
     }
 
     /**
-     * Endpoint for retrieving all general knowledge entries for a specific client.
-     * General knowledge entries are those not linked to a specific catalog item.
-     *
-     * @param clientId The ID of the client.
-     * @return A list of general {@link Knowledge} entries.
-     */
-    @GetMapping("/knowledge/general")
-    public ResponseEntity<?> getGeneralKnowledge(@RequestParam Long clientId) {
-        try {
-            List<Knowledge> generalKnowledge = knowledgeManagementService.getGeneralKnowledge(clientId);
-            return ResponseEntity.ok(generalKnowledge);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("Помилка отримання загальних знань: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Endpoint for updating a specific general knowledge entry.
-     *
-     * @param knowledgeId The ID of the knowledge entry to update.
-     * @param request The new text content for the knowledge entry.
-     * @return A response indicating the result of the operation.
-     */
-    @PutMapping("/knowledge/general/{knowledgeId}")
-    public ResponseEntity<String> updateGeneralKnowledge(@PathVariable Long knowledgeId, @Valid @RequestBody org.example.model.request.UpdateKnowledgeRequest request) {
-        try {
-            knowledgeManagementService.updateGeneralKnowledge(knowledgeId, request.getNewContent());
-            return ResponseEntity.ok("Запис загальних знань ID " + knowledgeId + " успішно оновлено.");
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("Помилка оновлення загальних знань: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Endpoint for creating a new catalog item.
-     *
-     * @param itemDto  The CatalogItem DTO from the request body.
-     * @param clientId The ID of the client to whom this item belongs.
-     * @return The created CatalogItem.
+     * Створює новий товар в каталозі.
      */
     @PostMapping("/catalog-items")
     public ResponseEntity<?> createCatalogItem(@Valid @RequestBody org.example.model.dto.CatalogItemDto itemDto, @RequestParam Long clientId) {
@@ -101,32 +57,41 @@ public class ManagementController {
             CatalogItem createdItem = catalogManagementService.createCatalogItem(newItem, clientId);
             return ResponseEntity.ok(createdItem);
         } catch (Exception e) {
+            logger.error("Помилка створення товару", e);
             return ResponseEntity.internalServerError().body("Помилка створення товару: " + e.getMessage());
         }
     }
 
     /**
-     * Endpoint for updating an existing catalog item.
-     *
-     * @param itemId      The ID of the item to update.
-     * @param itemDto     The updated item data.
-     * @return The updated CatalogItem.
+     * Оновлює існуючий товар в каталозі.
      */
     @PutMapping("/catalog-items/{itemId}")
-        public ResponseEntity<?> updateCatalogItem(@PathVariable Long itemId, @Valid @RequestBody org.example.model.dto.CatalogItemDto itemDto) {
+    public ResponseEntity<?> updateCatalogItem(@PathVariable Long itemId, @Valid @RequestBody org.example.model.dto.CatalogItemDto itemDto) {
         try {
             CatalogItem updatedItem = new CatalogItem();
             BeanUtils.copyProperties(itemDto, updatedItem);
             CatalogItem result = catalogManagementService.updateCatalogItem(itemId, updatedItem);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
+            logger.error("Помилка оновлення товару", e);
             return ResponseEntity.internalServerError().body("Помилка оновлення товару: " + e.getMessage());
         }
     }
 
+    /**
+     * Видаляє товар з каталогу.
+     */
     @DeleteMapping("/catalog-items/{itemId}")
     public ResponseEntity<Void> deleteCatalogItem(@PathVariable Long itemId) {
-        catalogManagementService.deleteCatalogItem(itemId);
-        return ResponseEntity.noContent().build();
+        try {
+            catalogManagementService.deleteCatalogItem(itemId);
+            return ResponseEntity.noContent().build();
+        } catch (Exception e) {
+            logger.error("Помилка видалення товару", e);
+            return ResponseEntity.internalServerError().build();
+        }
     }
+
+    // Додаємо статичний логгер, оскільки ми в контролері
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ManagementController.class);
 }

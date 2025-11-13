@@ -47,4 +47,7 @@ public class CatalogItem {
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb")
     private Map<String, String> attributes;
+
+    @Column(name = "doc_version", columnDefinition = "integer default 0")
+    private int docVersion = 0;
 }
